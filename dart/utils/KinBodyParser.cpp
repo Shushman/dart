@@ -105,6 +105,7 @@ dynamics::SkeletonPtr KinBodyParser::readKinBody(
     bodyElement, skeletonFrame,_baseUri, retriever);
 
   //How to add newBodyNode to new Skeleton?
+  //Also need to add some static joint I guess
   //JS HELP!
 
 
