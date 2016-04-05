@@ -152,13 +152,13 @@ public:
     }
   }
 
-  void drawSkels() override
+  void drawWorld() const override
   {
     // Make sure lighting is turned on and that polygons get filled in
     glEnable(GL_LIGHTING);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    SimWindow::drawSkels();
+    SimWindow::drawWorld();
   }
 
   void displayTimer(int _val) override
@@ -224,13 +224,14 @@ protected:
   {
     for(size_t i=0; i<mJointConstraints.size(); ++i)
     {
-      dart::constraint::JointConstraint* constraint = mJointConstraints[i];
+      const dart::constraint::JointConstraintPtr& constraint =
+          mJointConstraints[i];
+
       if(constraint->getBodyNode1()->getSkeleton() == skel
          || constraint->getBodyNode2()->getSkeleton() == skel)
       {
         mWorld->getConstraintSolver()->removeConstraint(constraint);
         mJointConstraints.erase(mJointConstraints.begin()+i);
-        delete constraint;
         break; // There should only be one constraint per skeleton
       }
     }
@@ -248,7 +249,7 @@ protected:
 
   /// History of the active JointConstraints so that we can properly delete them
   /// when a Skeleton gets removed
-  std::vector<dart::constraint::JointConstraint*> mJointConstraints;
+  std::vector<dart::constraint::JointConstraintPtr> mJointConstraints;
 
   /// A blueprint Skeleton that we will use to spawn balls
   SkeletonPtr mOriginalBall;
@@ -334,8 +335,9 @@ void setAllColors(const SkeletonPtr& object, const Eigen::Vector3d& color)
   for(size_t i=0; i < object->getNumBodyNodes(); ++i)
   {
     BodyNode* bn = object->getBodyNode(i);
-    for(size_t j=0; j < bn->getNumVisualizationShapes(); ++j)
-      bn->getVisualizationShape(j)->setColor(color);
+    auto visualShapeNodes = bn->getShapeNodesWith<VisualAddon>();
+    for(auto visualShapeNode : visualShapeNodes)
+      visualShapeNode->getVisualAddon()->setColor(color);
   }
 }
 
@@ -421,10 +423,9 @@ SkeletonPtr createGround()
   std::shared_ptr<BoxShape> shape = std::make_shared<BoxShape>(
         Eigen::Vector3d(default_ground_width, default_ground_width,
                         default_wall_thickness));
-  shape->setColor(Eigen::Vector3d(1.0, 1.0, 1.0));
-
-  bn->addCollisionShape(shape);
-  bn->addVisualizationShape(shape);
+  auto shapeNode
+      = bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
+  shapeNode->getVisualAddon()->setColor(Eigen::Vector3d(1.0, 1.0, 1.0));
 
   return ground;
 }
@@ -438,10 +439,9 @@ SkeletonPtr createWall()
   std::shared_ptr<BoxShape> shape = std::make_shared<BoxShape>(
         Eigen::Vector3d(default_wall_thickness, default_ground_width,
                         default_wall_height));
-  shape->setColor(Eigen::Vector3d(0.8, 0.8, 0.8));
-
-  bn->addCollisionShape(shape);
-  bn->addVisualizationShape(shape);
+  auto shapeNode
+      = bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
+  shapeNode->getVisualAddon()->setColor(Eigen::Vector3d(0.8, 0.8, 0.8));
 
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
   tf.translation() = Eigen::Vector3d(

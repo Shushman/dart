@@ -41,6 +41,7 @@
 #include "dart/dynamics/Skeleton.h"
 #include "dart/dynamics/BodyNode.h"
 #include "dart/dynamics/Shape.h"
+#include "dart/dynamics/ShapeNode.h"
 #include "dart/dynamics/BoxShape.h"
 #include "dart/dynamics/CylinderShape.h"
 #include "dart/dynamics/EllipsoidShape.h"
@@ -103,24 +104,11 @@ void OpenGLRenderInterface::clear(const Eigen::Vector3d& _color) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void OpenGLRenderInterface::setDefaultLight() {
+void OpenGLRenderInterface::setMaterial(const Eigen::Vector3d& /*_diffuse*/, const Eigen::Vector3d& /*_specular*/, double /*_cosinePow*/) {
 
 }
 
-void OpenGLRenderInterface::turnLightsOff() {
-    glDisable(GL_LIGHTING);
-}
-
-void OpenGLRenderInterface::turnLightsOn() {
-    //not finished yet
-    glEnable(GL_LIGHTING);
-}
-
-void OpenGLRenderInterface::setMaterial(const Eigen::Vector3d& _diffuse, const Eigen::Vector3d& _specular, double _cosinePow) {
-
-}
-
-void OpenGLRenderInterface::getMaterial(Eigen::Vector3d& _diffuse, Eigen::Vector3d& _specular, double& _cosinePow) const {
+void OpenGLRenderInterface::getMaterial(Eigen::Vector3d& /*_diffuse*/, Eigen::Vector3d& /*_specular*/, double& /*_cosinePow*/) const {
 
 }
 
@@ -348,8 +336,7 @@ void OpenGLRenderInterface::recursiveRender(const struct aiScene *sc, const stru
         if(mesh->mMaterialIndex != (unsigned int)(-1)) // -1 is being used by us to indicate no material
             applyMaterial(sc->mMaterials[mesh->mMaterialIndex]);
 
-        if(mesh->mNormals == nullptr) {
-            glDisable(GL_LIGHTING);
+        if(mesh->mNormals == nullptr) { glDisable(GL_LIGHTING);
         } else {
             glEnable(GL_LIGHTING);
         }
@@ -390,38 +377,97 @@ void OpenGLRenderInterface::recursiveRender(const struct aiScene *sc, const stru
     glPopMatrix();
 }
 
-void OpenGLRenderInterface::drawMesh(const Eigen::Vector3d& _scale, const aiScene* _mesh) {
-    if(_mesh) {
-        glPushMatrix();
-        glScaled(_scale(0), _scale(1), _scale(2));
-        recursiveRender(_mesh, _mesh->mRootNode);
-        glPopMatrix();
+//==============================================================================
+void OpenGLRenderInterface::drawMesh(
+    const Eigen::Vector3d& scale, const aiScene* mesh)
+{
+  if (!mesh)
+    return;
+
+  glPushMatrix();
+
+  glScaled(scale[0], scale[1], scale[2]);
+  recursiveRender(mesh, mesh->mRootNode);
+
+  glPopMatrix();
+}
+
+//==============================================================================
+void OpenGLRenderInterface::drawSoftMesh(const aiMesh* mesh)
+{
+  glEnable(GL_LIGHTING);
+  glEnable(GL_AUTO_NORMAL);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+  for (auto i = 0u; i < mesh->mNumFaces; ++i)
+  {
+    glBegin(GL_TRIANGLES);
+
+    const auto& face = &mesh->mFaces[i];
+    assert(3u == face->mNumIndices);
+
+    for (auto j = 0u; j < 3; ++j)
+    {
+      auto index = face->mIndices[j];
+      glNormal3fv(&mesh->mVertices[index].x);
+      glVertex3fv(&mesh->mVertices[index].x);
     }
+
+    glEnd();
+  }
 }
 
 void OpenGLRenderInterface::drawList(GLuint index) {
     glCallList(index);
 }
 
-void OpenGLRenderInterface::compileList(dynamics::Skeleton* _skel) {
-    if(_skel == 0)
-        return;
-
-    for (size_t i = 0; i < _skel->getNumBodyNodes(); i++) {
-        compileList(_skel->getBodyNode(i));
-    }
+void OpenGLRenderInterface::drawLineSegments(
+    const std::vector<Eigen::Vector3d>& _vertices,
+    const Eigen::aligned_vector<Eigen::Vector2i>& _connections)
+{
+  glBegin(GL_LINES);
+  for(const Eigen::Vector2i& c : _connections)
+  {
+    const Eigen::Vector3d& v1 = _vertices[c[0]];
+    const Eigen::Vector3d& v2 = _vertices[c[1]];
+    glVertex3f(v1[0], v1[1], v1[2]);
+    glVertex3f(v2[0], v2[1], v2[2]);
+  }
+  glEnd();
 }
 
-void OpenGLRenderInterface::compileList(dynamics::BodyNode* _node) {
-    if(_node == 0)
-        return;
+//==============================================================================
+void OpenGLRenderInterface::compileList(dynamics::Skeleton* _skel)
+{
+  if(_skel == 0)
+    return;
 
-    for (size_t i = 0; i < _node->getNumVisualizationShapes(); i++)
-        compileList(_node->getVisualizationShape(i).get());
-    for (size_t i = 0; i < _node->getNumCollisionShapes(); i++)
-        compileList(_node->getCollisionShape(i).get());
+  for (size_t i = 0; i < _skel->getNumBodyNodes(); i++) {
+    compileList(_skel->getBodyNode(i));
+  }
 }
 
+//==============================================================================
+void OpenGLRenderInterface::compileList(dynamics::BodyNode* node)
+{
+  if(node == 0)
+    return;
+
+  for (auto childFrame : node->getChildFrames())
+  {
+    auto shapeFrame = dynamic_cast<dynamics::ShapeFrame*>(childFrame);
+    if (shapeFrame)
+      compileList(shapeFrame->getShape().get());
+  }
+
+  for (auto i = 0u; i < node->getNumNodes<dynamics::ShapeNode>(); ++i)
+  {
+    auto shapeNode = node->getNode<dynamics::ShapeNode>(i);
+    compileList(shapeNode->getShape().get());
+  }
+}
+
+//==============================================================================
 //FIXME: Use polymorphism instead of switch statements
 void OpenGLRenderInterface::compileList(dynamics::Shape* _shape) {
     if(_shape == 0)
@@ -473,133 +519,6 @@ GLuint OpenGLRenderInterface::compileList(const Eigen::Vector3d& _scale, const a
     return index;
 }
 
-void OpenGLRenderInterface::draw(dynamics::Skeleton* _skel, bool _vizCol, bool _colMesh) {
-    if(_skel == 0)
-        return;
-
-    for (size_t i = 0; i < _skel->getNumBodyNodes(); i++) {
-        draw(_skel->getBodyNode(i), _vizCol, _colMesh);
-    }
-}
-
-void OpenGLRenderInterface::draw(dynamics::BodyNode* _node, bool _vizCol, bool _colMesh) {
-    if(_node == 0)
-        return;
-
-    // Get world transform
-    Eigen::Isometry3d pose;
-    pose = _node->getTransform();
-
-    // GL calls
-    if(_vizCol && _node->isColliding()) {
-        glDisable(GL_TEXTURE_2D);
-        glEnable(GL_COLOR_MATERIAL);
-        glColor3f(1.0f, .1f, .1f);
-    }
-
-    glPushMatrix();
-    glMultMatrixd(pose.data());
-
-    if(_colMesh) {
-        for (size_t i = 0; i < _node->getNumCollisionShapes(); i++)
-            draw(_node->getCollisionShape(i).get());
-    }
-    else {
-        for (size_t i = 0; i < _node->getNumVisualizationShapes(); i++)
-            draw(_node->getVisualizationShape(i).get());
-    }
-
-    glColor3f(1.0f,1.0f,1.0f);
-    glEnable( GL_TEXTURE_2D );
-    glDisable(GL_COLOR_MATERIAL);
-    glPopMatrix();
-}
-
-//FIXME: Refactor this to use polymorphism.
-void OpenGLRenderInterface::draw(dynamics::Shape* _shape) {
-    if(_shape == 0)
-        return;
-
-    Eigen::Isometry3d pose = _shape->getLocalTransform();
-    Eigen::Vector3d color = _shape->getColor();
-
-    glPushMatrix();
-
-    glColorMaterial ( GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE );
-    glEnable ( GL_COLOR_MATERIAL );
-
-    glColor3d(color[0], color[1], color[2]);
-
-    glMultMatrixd(pose.data());
-
-    switch(_shape->getShapeType()) {
-        case dynamics::Shape::BOX: {
-            //FIXME: We are not in a glut instance
-            dynamics::BoxShape* box = static_cast<dynamics::BoxShape*>(_shape);
-            drawCube(box->getSize());
-            break;
-        }
-        case dynamics::Shape::CYLINDER: {
-            //FIXME: We are not in a glut instance
-            dynamics::CylinderShape* cylinder = static_cast<dynamics::CylinderShape*>(_shape);
-            drawCylinder(cylinder->getRadius(), cylinder->getHeight());
-            break;
-        }
-        case dynamics::Shape::ELLIPSOID: {
-            //FIXME: We are not in a glut instance
-            dynamics::EllipsoidShape* ellipsoid = static_cast<dynamics::EllipsoidShape*>(_shape);
-            drawEllipsoid(ellipsoid->getSize());
-            break;
-        }
-        case dynamics::Shape::PLANE: {
-            dterr << "PLANE shape is not supported yet." << std::endl;
-            break;
-        }
-        case dynamics::Shape::MESH: {
-            glDisable(GL_COLOR_MATERIAL); // Use mesh colors to draw
-
-            dynamics::MeshShape* mesh = static_cast<dynamics::MeshShape*>(_shape);
-
-            if(!mesh)
-                break;
-            else if(mesh->getDisplayList())
-                drawList(mesh->getDisplayList());
-            else
-                drawMesh(mesh->getScale(), mesh->getMesh());
-
-            break;
-        }
-        case dynamics::Shape::SOFT_MESH: {
-            // Do nothing
-            break;
-        }
-      case dynamics::Shape::LINE_SEGMENT: {
-        dynamics::LineSegmentShape* lineSegments =
-          static_cast<dynamics::LineSegmentShape*>(_shape);
-        drawLineSegments(lineSegments->getVertices(),
-                         lineSegments->getConnections());
-      }
-    }
-
-    glDisable(GL_COLOR_MATERIAL);
-    glPopMatrix();
-}
-
-void OpenGLRenderInterface::drawLineSegments(
-    const std::vector<Eigen::Vector3d>& _vertices,
-    const Eigen::aligned_vector<Eigen::Vector2i>& _connections)
-{
-  glBegin(GL_LINES);
-  for(const Eigen::Vector2i& c : _connections)
-  {
-    const Eigen::Vector3d& v1 = _vertices[c[0]];
-    const Eigen::Vector3d& v2 = _vertices[c[1]];
-    glVertex3f(v1[0], v1[1], v1[2]);
-    glVertex3f(v2[0], v2[1], v2[2]);
-  }
-  glEnd();
-}
-
 void OpenGLRenderInterface::setPenColor(const Eigen::Vector4d& _col) {
     glColor4d(_col[0], _col[1], _col[2], _col[3]);
 }
@@ -612,11 +531,11 @@ void OpenGLRenderInterface::setLineWidth(float _width) {
     glLineWidth(_width);
 }
 
-void OpenGLRenderInterface::readFrameBuffer(DecoBufferType _buffType, DecoColorChannel _ch, void* _pixels) {
+void OpenGLRenderInterface::readFrameBuffer(DecoBufferType /*_buffType*/, DecoColorChannel /*_ch*/, void* /*_pixels*/) {
 
 }
 
-void OpenGLRenderInterface::saveToImage(const char* _filename, DecoBufferType _buffType) {
+void OpenGLRenderInterface::saveToImage(const char* /*_filename*/, DecoBufferType /*_buffType*/) {
 
 }
 

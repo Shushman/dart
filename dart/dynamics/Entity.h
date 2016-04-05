@@ -43,20 +43,14 @@
 
 #include "dart/common/Subject.h"
 #include "dart/common/Signal.h"
+#include "dart/common/AddonManager.h"
 #include "dart/dynamics/Shape.h"
 #include "dart/dynamics/SmartPointer.h"
-
-namespace dart {
-namespace renderer {
-class RenderInterface;
-} // namespace renderer
-} // namespace dart
 
 namespace dart {
 namespace dynamics {
 
 class Frame;
-class Shape;
 
 /// Entity class is a base class for any objects that exist in the kinematic
 /// tree structure of DART.
@@ -80,22 +74,16 @@ public:
       = common::Signal<void(const Entity*,
                             const std::string& _oldName,
                             const std::string& _newName)>;
-  using VizShapeAddedSignal
-      = common::Signal<void(const Entity*, ConstShapePtr _newVisShape)>;
 
-  using VizShapeRemovedSignal = VizShapeAddedSignal;
-
+  // TODO(MXG): Deprecate this with class the next major version-up, and move
+  // mName into the properties of inheriting classes.
   struct Properties
   {
     /// Name of the Entity
     std::string mName;
 
-    /// Visualization shapes for the Entity
-    std::vector<ShapePtr> mVizShapes;
-
     /// Constructor
-    Properties(const std::string& _name = "",
-               const std::vector<ShapePtr>& _vizShapes=std::vector<ShapePtr>());
+    Properties(const std::string& _name = "");
 
     virtual ~Properties() = default;
   };
@@ -130,35 +118,6 @@ public:
 
   /// Return the name of this Entity
   virtual const std::string& getName() const;
-
-  /// Add a visualization Shape for this Entity
-  virtual void addVisualizationShape(const ShapePtr& _shape);
-
-  /// Remove a visualization Shape from this Entity
-  virtual void removeVisualizationShape(const ShapePtr& _shape);
-
-  /// Remove all visualization Shapes from this Entity
-  virtual void removeAllVisualizationShapes();
-
-  /// Return the number of visualization shapes
-  size_t getNumVisualizationShapes() const;
-
-  /// Return _index-th visualization shape
-  ShapePtr getVisualizationShape(size_t _index);
-
-  /// Return (const) _index-th visualization shape
-  ConstShapePtr getVisualizationShape(size_t _index) const;
-
-  /// Get the visualization shapes of this Entity
-  const std::vector<ShapePtr>& getVisualizationShapes();
-
-  /// Get the (const) visualization shapes of this Entity
-  const std::vector<ConstShapePtr>& getVisualizationShapes() const;
-
-  /// Render this Entity
-  virtual void draw(renderer::RenderInterface* _ri = nullptr,
-                    const Eigen::Vector4d& _color = Eigen::Vector4d::Ones(),
-                    bool _useDefaultColor = true, int _depth = 0) const;
 
   /// Get the parent (reference) frame of this Entity
   Frame* getParentFrame();
@@ -242,12 +201,6 @@ protected:
   /// Name changed signal
   NameChangedSignal mNameChangedSignal;
 
-  /// Visualization added signal
-  VizShapeAddedSignal mVizShapeAddedSignal;
-
-  /// Visualization removed signal
-  VizShapeRemovedSignal mVizShapeRemovedSignal;
-
   /// Transform changed signal
   EntitySignal mTransformUpdatedSignal;
 
@@ -267,9 +220,6 @@ public:
 
   /// Slot register for name changed signal
   common::SlotRegister<NameChangedSignal> onNameChanged;
-
-  /// Slot register for visualization changed signal
-  common::SlotRegister<VizShapeAddedSignal> onVizShapeAdded;
 
   /// Slot register for transform updated signal
   common::SlotRegister<EntitySignal> onTransformUpdated;

@@ -264,7 +264,7 @@ void JointCoulombFrictionConstraint::applyImpulse(double* _lambda)
       continue;
 
     mJoint->setConstraintImpulse(
-                i, mJoint->getConstraintImpulse(i) + _lambda[localIndex]);
+            i, mJoint->getConstraintImpulse(i) + _lambda[localIndex]);
 
     mOldX[i] = _lambda[localIndex];
 

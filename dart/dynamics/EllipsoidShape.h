@@ -57,20 +57,22 @@ public:
   /// \brief Get size of this box.
   const Eigen::Vector3d& getSize() const;
 
-  // Documentation inherited.
-  void draw(renderer::RenderInterface* _ri = nullptr,
-            const Eigen::Vector4d& _col = Eigen::Vector4d::Ones(),
-            bool _useDefaultColor = true) const;
+  /// \brief Compute volume from given properties
+  static double computeVolume(const Eigen::Vector3d& size);
+
+  /// \brief Compute moments of inertia of a ellipsoid
+  static Eigen::Matrix3d computeInertia(
+      const Eigen::Vector3d& size, double mass);
 
   // Documentation inherited.
-  virtual Eigen::Matrix3d computeInertia(double _mass) const;
+  Eigen::Matrix3d computeInertia(double mass) const override;
 
   /// \brief True if (mDim[0] == mDim[1] == mDim[2]).
   bool isSphere(void) const;
 
 protected:
   // Documentation inherited.
-  void computeVolume();
+  void updateVolume() override;
 
 private:
   /// \brief Size of this ellipsoid

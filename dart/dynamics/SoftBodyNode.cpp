@@ -40,14 +40,11 @@
 #include <string>
 #include <vector>
 
-#include "dart/math/Helpers.h"
 #include "dart/common/Console.h"
+#include "dart/math/Helpers.h"
 #include "dart/dynamics/Joint.h"
 #include "dart/dynamics/Shape.h"
 #include "dart/dynamics/Skeleton.h"
-#include "dart/renderer/LoadOpengl.h"
-#include "dart/renderer/RenderInterface.h"
-
 #include "dart/dynamics/PointMass.h"
 #include "dart/dynamics/SoftMeshShape.h"
 
@@ -131,35 +128,6 @@ SoftBodyNode::~SoftBodyNode()
 }
 
 //==============================================================================
-ShapePtr SoftBodyNode::removeSoftBodyShapes()
-{
-  ShapePtr oldShape;
-  for(size_t i=0; i<mBodyP.mColShapes.size(); )
-  {
-    if(dynamic_cast<dynamics::SoftMeshShape*>(mBodyP.mColShapes[i].get()))
-    {
-      oldShape = mBodyP.mColShapes[i];
-      removeCollisionShape(oldShape);
-    }
-    else
-      ++i;
-  }
-
-  for(size_t i=0; i<mEntityP.mVizShapes.size(); )
-  {
-    if(dynamic_cast<dynamics::SoftMeshShape*>(mEntityP.mVizShapes[i].get()))
-    {
-      oldShape = mEntityP.mVizShapes[i];
-      removeVisualizationShape(oldShape);
-    }
-    else
-      ++i;
-  }
-
-  return oldShape;
-}
-
-//==============================================================================
 void SoftBodyNode::setProperties(const Properties& _properties)
 {
   BodyNode::setProperties(
@@ -171,9 +139,6 @@ void SoftBodyNode::setProperties(const Properties& _properties)
 //==============================================================================
 void SoftBodyNode::setProperties(const UniqueProperties& _properties)
 {
-  // SoftMeshShape pointers should not be copied between bodies
-  ShapePtr oldShape = removeSoftBodyShapes();
-
   size_t newCount = _properties.mPointProps.size();
   size_t oldCount = mPointMasses.size();
   if(newCount < oldCount)
@@ -213,15 +178,25 @@ void SoftBodyNode::setProperties(const UniqueProperties& _properties)
   mSoftP.mFaces = _properties.mFaces;
 
   // Create a new SoftMeshShape for this SoftBodyNode
-  mSoftShape = std::shared_ptr<SoftMeshShape>(new SoftMeshShape(this));
-  addVisualizationShape(mSoftShape);
-  addCollisionShape(mSoftShape);
+  auto softMesh = std::shared_ptr<SoftMeshShape>(new SoftMeshShape(this));
+  auto newSoftShapeNode
+      = createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(
+          softMesh, "soft mesh");
 
-  if(oldShape) // Copy the properties of the previous soft shape, if it exists
+  // Copy the properties of the previous soft shape, if it exists
+  ShapeNodePtr softNode = mSoftShapeNode.lock();
+  if(softNode)
   {
-    mSoftShape->setColor(oldShape->getRGBA());
-    mSoftShape->setLocalTransform(oldShape->getLocalTransform());
+    newSoftShapeNode->getVisualAddon()->setColor(
+          softNode->getVisualAddon()->getRGBA());
+
+    newSoftShapeNode->setRelativeTransform(
+          softNode->getRelativeTransform());
+
+    softNode->remove();
   }
+
+  mSoftShapeNode = newSoftShapeNode;
 }
 
 //==============================================================================
@@ -278,13 +253,19 @@ const PointMass* SoftBodyNode::getPointMass(size_t _idx) const
 }
 
 //==============================================================================
+const std::vector<PointMass*>& SoftBodyNode::getPointMasses() const
+{
+  return mPointMasses;
+}
+
+//==============================================================================
 SoftBodyNode::SoftBodyNode(BodyNode* _parentBodyNode,
                            Joint* _parentJoint,
                            const Properties& _properties)
   : Entity(Frame::World(), "", false),
     Frame(Frame::World(), ""),
-    Node(ConstructBodyNode),
-    BodyNode(_parentBodyNode, _parentJoint, _properties)
+    BodyNode(_parentBodyNode, _parentJoint, _properties),
+    mSoftShapeNode(nullptr)
 {
   mNotifier = new PointMassNotifier(this, "PointMassNotifier");
   setProperties(_properties);
@@ -292,10 +273,17 @@ SoftBodyNode::SoftBodyNode(BodyNode* _parentBodyNode,
 
 //==============================================================================
 BodyNode* SoftBodyNode::clone(BodyNode* _parentBodyNode,
-                              Joint* _parentJoint) const
+                              Joint* _parentJoint, bool cloneNodes) const
 {
-  return new SoftBodyNode(_parentBodyNode, _parentJoint,
-                          getSoftBodyNodeProperties());
+  SoftBodyNode* clonedBn = new SoftBodyNode(
+        _parentBodyNode, _parentJoint, getSoftBodyNodeProperties());
+
+  clonedBn->matchAddons(this);
+
+  if(cloneNodes)
+    clonedBn->matchNodes(this);
+
+  return clonedBn;
 }
 
 //==============================================================================
@@ -565,8 +553,8 @@ void SoftBodyNode::updateTransmittedForceID(const Eigen::Vector3d& _gravity,
 
 //==============================================================================
 void SoftBodyNode::updateJointForceID(double _timeStep,
-                                      double _withDampingForces,
-                                      double _withSpringForces)
+                                      bool _withDampingForces,
+                                      bool _withSpringForces)
 {
   for (size_t i = 0; i < mPointMasses.size(); ++i)
     mPointMasses.at(i)->updateJointForceID(_timeStep,
@@ -580,8 +568,8 @@ void SoftBodyNode::updateJointForceID(double _timeStep,
 
 //==============================================================================
 void SoftBodyNode::updateJointForceFD(double _timeStep,
-                                      double _withDampingForces,
-                                      double _withSpringForces)
+                                      bool _withDampingForces,
+                                      bool _withSpringForces)
 {
   BodyNode::updateJointForceFD(_timeStep,
                                _withDampingForces,
@@ -1150,87 +1138,6 @@ void SoftBodyNode::clearInternalForces()
 
   for (size_t i = 0; i < mPointMasses.size(); ++i)
     mPointMasses[i]->resetForces();
-}
-
-//==============================================================================
-void SoftBodyNode::draw(renderer::RenderInterface* _ri,
-                        const Eigen::Vector4d& _color,
-                        bool _useDefaultColor,
-                        int _depth) const
-{
-  if (_ri == nullptr)
-    return;
-
-  _ri->pushMatrix();
-
-  // render the self geometry
-//  mParentJoint->applyGLTransform(_ri);
-  _ri->transform(getRelativeTransform());
-
-  _ri->pushName((unsigned)mID);
-  // rigid body
-  for (size_t i = 0; i < mEntityP.mVizShapes.size(); i++)
-  {
-    _ri->pushMatrix();
-    mEntityP.mVizShapes[i]->draw(_ri, _color, _useDefaultColor);
-    _ri->popMatrix();
-  }
-
-  // vertex
-//  if (_showPointMasses)
-//  {
-//    for (size_t i = 0; i < mPointMasses.size(); ++i)
-//    {
-//      _ri->pushMatrix();
-//      mPointMasses[i]->draw(_ri, _color, _useDefaultColor);
-//      _ri->popMatrix();
-//    }
-//  }
-
-  // edges (mesh)
-//  Eigen::Vector4d fleshColor = _color;
-//  fleshColor[3] = 0.5;
-//  _ri->setPenColor(fleshColor);
-//  if (_showMeshs)
-  {
-    _ri->setPenColor(mSoftShape->getRGBA());
-    glEnable(GL_LIGHTING);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-    Eigen::Vector3d pos;
-    Eigen::Vector3d pos_normalized;
-    for (size_t i = 0; i < mSoftP.mFaces.size(); ++i)
-    {
-      glEnable(GL_AUTO_NORMAL);
-      glBegin(GL_TRIANGLES);
-
-      pos = mPointMasses[mSoftP.mFaces[i](0)]->getLocalPosition();
-      pos_normalized = pos.normalized();
-      glNormal3f(pos_normalized(0), pos_normalized(1), pos_normalized(2));
-      glVertex3f(pos(0), pos(1), pos(2));
-      pos = mPointMasses[mSoftP.mFaces[i](1)]->getLocalPosition();
-      pos_normalized = pos.normalized();
-      glNormal3f(pos_normalized(0), pos_normalized(1), pos_normalized(2));
-      glVertex3f(pos(0), pos(1), pos(2));
-      pos = mPointMasses[mSoftP.mFaces[i](2)]->getLocalPosition();
-      pos_normalized = pos.normalized();
-      glNormal3f(pos_normalized(0), pos_normalized(1), pos_normalized(2));
-      glVertex3f(pos(0), pos(1), pos(2));
-      glEnd();
-    }
-  }
-
-  _ri->popName();
-
-  // render the subtree
-//  for (unsigned int i = 0; i < mChildBodyNodes.size(); i++)
-//  {
-//    getChildBodyNode(i)->draw(_ri, _color, _useDefaultColor);
-//  }
-  for(Entity* entity : mChildEntities)
-    entity->draw(_ri, _color, _useDefaultColor);
-
-  _ri->popMatrix();
 }
 
 //==============================================================================

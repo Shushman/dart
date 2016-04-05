@@ -65,7 +65,7 @@ void MyWindow::timeStepping()
 void MyWindow::drawSkels()
 {
   for (unsigned int i = 0; i < mWorld->getNumSkeletons(); i++)
-    mWorld->getSkeleton(i)->draw(mRI);
+    drawSkeleton(mWorld->getSkeleton(i).get());
 
   // draw arrow
   if (mImpulseDuration > 0)
@@ -142,7 +142,7 @@ void MyWindow::keyboard(unsigned char key, int x, int y)
       if (mHarnessOn)
       {
         BodyNode* bd = mWorld->getSkeleton(1)->getBodyNode("h_pelvis");
-        mWeldJoint = new WeldJointConstraint(bd);
+        mWeldJoint = std::make_shared<WeldJointConstraint>(bd);
         mWorld->getConstraintSolver()->addConstraint(mWeldJoint);
       }
       else

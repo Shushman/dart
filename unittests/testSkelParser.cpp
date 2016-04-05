@@ -44,6 +44,7 @@
 #include "dart/dynamics/Skeleton.h"
 #include "dart/simulation/World.h"
 #include "dart/simulation/World.h"
+#include "dart/utils/XmlHelpers.h"
 #include "dart/utils/SkelParser.h"
 
 using namespace dart;
@@ -216,10 +217,10 @@ TEST(SkelParser, PlanarJoint)
   EXPECT_TRUE(planarJoint3 != nullptr);
   EXPECT_TRUE(planarJoint4 != nullptr);
 
-  EXPECT_EQ(planarJoint1->getPlaneType(), PlanarJoint::PT_XY);
-  EXPECT_EQ(planarJoint2->getPlaneType(), PlanarJoint::PT_YZ);
-  EXPECT_EQ(planarJoint3->getPlaneType(), PlanarJoint::PT_ZX);
-  EXPECT_EQ(planarJoint4->getPlaneType(), PlanarJoint::PT_ARBITRARY);
+  EXPECT_EQ(planarJoint1->getPlaneType(), PlanarJoint::PlaneType::XY);
+  EXPECT_EQ(planarJoint2->getPlaneType(), PlanarJoint::PlaneType::YZ);
+  EXPECT_EQ(planarJoint3->getPlaneType(), PlanarJoint::PlaneType::ZX);
+  EXPECT_EQ(planarJoint4->getPlaneType(), PlanarJoint::PlaneType::ARBITRARY);
 
   EXPECT_EQ(planarJoint1->getTranslationalAxis1(), Eigen::Vector3d::UnitX());
   EXPECT_EQ(planarJoint2->getTranslationalAxis1(), Eigen::Vector3d::UnitY());

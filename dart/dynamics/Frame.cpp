@@ -35,9 +35,9 @@
  */
 
 #include "dart/dynamics/Frame.h"
-#include "dart/dynamics/Shape.h"
-#include "dart/renderer/RenderInterface.h"
+
 #include "dart/common/Console.h"
+#include "dart/dynamics/Shape.h"
 
 namespace dart {
 namespace dynamics {
@@ -428,40 +428,15 @@ size_t Frame::getNumChildFrames() const
 }
 
 //==============================================================================
-bool Frame::isWorld() const
+bool Frame::isShapeFrame() const
 {
-  return mAmWorld;
+  return mAmShapeFrame;
 }
 
 //==============================================================================
-void Frame::draw(renderer::RenderInterface* _ri, const Eigen::Vector4d& _color,
-                 bool _useDefaultColor, int _depth) const
+bool Frame::isWorld() const
 {
-  if(nullptr == _ri)
-    return;
-
-  _ri->pushMatrix();
-
-  // Use the relative transform of this Frame. We assume that we are being
-  // called from the parent Frame's renderer.
-  // TODO(MXG): This can cause trouble if the draw function is originally called
-  // on an Entity or Frame which is not a child of the World Frame
-  _ri->transform(getRelativeTransform());
-
-  // _ri->pushName(???); TODO(MXG): What should we do about this for Frames?
-  for(size_t i=0; i < mEntityP.mVizShapes.size(); ++i)
-  {
-    _ri->pushMatrix();
-    mEntityP.mVizShapes[i]->draw(_ri, _color, _useDefaultColor);
-    _ri->popMatrix();
-  }
-  // _ri.popName();
-
-  // render the subtree
-  for(Entity* entity : mChildEntities)
-    entity->draw(_ri, _color, _useDefaultColor);
-
-  _ri->popMatrix();
+  return mAmWorld;
 }
 
 //==============================================================================
@@ -525,13 +500,25 @@ Frame::Frame(Frame* _refFrame, const std::string& _name)
     mWorldTransform(Eigen::Isometry3d::Identity()),
     mVelocity(Eigen::Vector6d::Zero()),
     mAcceleration(Eigen::Vector6d::Zero()),
-    mAmWorld(false)
+    mAmWorld(false),
+    mAmShapeFrame(false)
 {
   mAmFrame = true;
   mEntityP.mName = _name;
   changeParentFrame(_refFrame);
 }
 
+//==============================================================================
+Frame::Frame(ConstructAbstract_t)
+  : Entity(Entity::ConstructAbstract),
+    mAmWorld(false),
+    mAmShapeFrame(false)
+{
+  dterr << "[Frame::constructor] You are calling a constructor for the Frame "
+        << "class which is only meant to be used by pure abstract classes. If "
+        << "you are seeing this, then there is a bug!\n";
+  assert(false);
+}
 
 //==============================================================================
 void Frame::changeParentFrame(Frame* _newParentFrame)
@@ -555,7 +542,7 @@ void Frame::changeParentFrame(Frame* _newParentFrame)
     }
   }
 
-  if(mParentFrame)
+  if(mParentFrame && !mParentFrame->isWorld())
   {
     FramePtrSet::iterator it = mParentFrame->mChildFrames.find(this);
     if(it != mParentFrame->mChildFrames.end())
@@ -568,8 +555,9 @@ void Frame::changeParentFrame(Frame* _newParentFrame)
     return;
   }
 
-  if(!mAmQuiet)
+  if(!mAmQuiet && !_newParentFrame->isWorld())
     _newParentFrame->mChildFrames.insert(this);
+
   Entity::changeParentFrame(_newParentFrame);
 }
 
@@ -591,7 +579,8 @@ Frame::Frame(ConstructWorld_t)
     mWorldTransform(Eigen::Isometry3d::Identity()),
     mVelocity(Eigen::Vector6d::Zero()),
     mAcceleration(Eigen::Vector6d::Zero()),
-    mAmWorld(true)
+    mAmWorld(true),
+    mAmShapeFrame(false)
 {
   mAmFrame = true;
 }

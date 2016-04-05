@@ -85,7 +85,7 @@ public:
   virtual void update();
 
   // Documentation inherited
-  virtual void setAlpha(double _alpha) override;
+  void notifyAlphaUpdate(double alpha) override;
 
   /// \brief
   void setMesh(
@@ -126,11 +126,6 @@ public:
   /// \brief
   void setDisplayList(int _index);
 
-  // Documentation inherited.
-  void draw(renderer::RenderInterface* _ri = nullptr,
-            const Eigen::Vector4d& _col = Eigen::Vector4d::Ones(),
-            bool _default = true) const;
-
   /// \brief
   static const aiScene* loadMesh(const std::string& _fileName);
 
@@ -139,17 +134,15 @@ public:
     const std::string& _uri, const common::ResourceRetrieverPtr& _retriever);
 
   // Documentation inherited.
-  virtual Eigen::Matrix3d computeInertia(double _mass) const;
+  Eigen::Matrix3d computeInertia(double mass) const override;
 
 protected:
   // Documentation inherited.
-  virtual void computeVolume();
+  void updateVolume() override;
 
-private:
   /// \brief
   void _updateBoundingBoxDim();
 
-protected:
   /// \brief
   const aiScene* mMesh;
 

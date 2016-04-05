@@ -124,6 +124,13 @@ bool GradientDescentSolver::solve()
   double gamma = mGradientP.mStepSize;
   size_t dim = problem->getDimension();
 
+  if(dim == 0)
+  {
+    problem->setOptimalSolution(Eigen::VectorXd());
+    problem->setOptimumValue(0.0);
+    return true;
+  }
+
   Eigen::VectorXd x = problem->getInitialGuess();
   assert(x.size() == static_cast<int>(dim));
 
@@ -174,11 +181,14 @@ bool GradientDescentSolver::solve()
           satisfied = false;
       }
 
+      dx.setZero();
       Eigen::Map<Eigen::VectorXd> dxMap(dx.data(), dim);
       Eigen::Map<Eigen::VectorXd> gradMap(grad.data(), dim);
       // Compute the gradient of the objective, combined with the weighted
       // gradients of the softened constraints
-      problem->getObjective()->evalGradient(x, dxMap);
+      const FunctionPtr& objective = problem->getObjective();
+      if(objective)
+        objective->evalGradient(x, dxMap);
       for(int i=0; i < static_cast<int>(problem->getNumEqConstraints()); ++i)
       {
         if(std::abs(mEqConstraintCostCache[i]) < tol)
@@ -267,7 +277,10 @@ bool GradientDescentSolver::solve()
 
   mLastConfig = x;
   problem->setOptimalSolution(x);
-  problem->setOptimumValue(problem->getObjective()->eval(x));
+  if(problem->getObjective())
+    problem->setOptimumValue(problem->getObjective()->eval(x));
+  else
+    problem->setOptimumValue(0.0);
 
   return minimized && satisfied;
 }

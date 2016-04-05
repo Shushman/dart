@@ -43,18 +43,13 @@
 #include <Eigen/Dense>
 
 #include "dart/math/Geometry.h"
+#include "dart/common/Deprecated.h"
 #include "dart/common/Subject.h"
 #include "dart/dynamics/SmartPointer.h"
-
-namespace dart {
-namespace renderer {
-class RenderInterface;
-}  // namespace renderer
-}  // namespace dart
+#include "dart/common/Deprecated.h"
 
 namespace dart {
 namespace dynamics {
-
 /// \brief
 class Shape : public virtual common::Subject
 {
@@ -89,58 +84,17 @@ public:
   /// \brief Destructor
   virtual ~Shape();
 
-  /// \brief Set RGB color components (leave alpha alone). Identical to
-  /// setRGB(const Eigen::Vector3d&)
-  void setColor(const Eigen::Vector3d& _color);
-
-  /// \brief Set RGBA color components
-  void setColor(const Eigen::Vector4d& _color);
-
-  /// \brief Set RGB color components (leave alpha alone)
-  void setRGB(const Eigen::Vector3d& _rgb);
-
-  /// \brief Set RGBA color components
-  virtual void setRGBA(const Eigen::Vector4d& _rgba);
-
-  /// \brief Get color.
-  Eigen::Vector3d getColor() const;
-
-  /// \brief Get RGB color components
-  Eigen::Vector3d getRGB() const;
-
-  /// \brief Get RGBA color components
-  const Eigen::Vector4d& getRGBA() const;
-
-  /// \brief Set the transparency of this Shape
-  virtual void setAlpha(double _alpha);
-
-  /// \brief Get dimensions of bounding box.
+  /// \brief Get the bounding box of the shape in its local coordinate frame.
   ///        The dimension will be automatically determined by the sub-classes
   ///        such as BoxShape, EllipsoidShape, CylinderShape, and MeshShape.
-  // TODO(JS): Single Vector3d does not fit to represent bounding box for
-  //           biased mesh shape. Two Vector3ds might be better; one is for
-  //           minimum verterx, and the other is for maximum verterx of the
-  //           bounding box.
-  const Eigen::Vector3d& getBoundingBoxDim() const;
-
-  /// \brief Set local transformation of the shape w.r.t. parent frame.
-  void setLocalTransform(const Eigen::Isometry3d& _Transform);
-
-  /// \brief Get local transformation of the shape w.r.t. parent frame.
-  const Eigen::Isometry3d& getLocalTransform() const;
-
-  /// \brief Set local transformation of the shape
-  ///        The offset is translational part of the local transformation.
-  /// \sa setLocalTransform()
-  void setOffset(const Eigen::Vector3d& _offset);
-
-  /// \brief Get local offset of the shape w.r.t. parent frame.
-  ///        The offset is translational part of the local transformation.
-  /// \sa getLocalTransform()
-  Eigen::Vector3d getOffset() const;
+  const math::BoundingBox& getBoundingBox() const;
 
   /// \brief
-  virtual Eigen::Matrix3d computeInertia(double _mass) const = 0;
+  virtual Eigen::Matrix3d computeInertia(double mass) const = 0;
+
+  Eigen::Matrix3d computeInertiaFromDensity(double density) const;
+
+  Eigen::Matrix3d computeInertiaFromMass(double mass) const;
 
   /// \brief Get volume of this shape.
   ///        The volume will be automatically calculated by the sub-classes
@@ -175,28 +129,19 @@ public:
   /// Instruct this shape to update its data
   virtual void refreshData();
 
-  /// \brief
-  virtual void draw(renderer::RenderInterface* _ri = nullptr,
-                    const Eigen::Vector4d& _color = Eigen::Vector4d::Ones(),
-                    bool _useDefaultColor = true) const = 0;
+  /// Notify that the alpha of this shape has updated
+  virtual void notifyAlphaUpdate(double alpha);
 
-  /// Pass in true to prevent this shape from being rendered. Pass in false to
-  /// allow it to render again.
-  void setHidden(bool _hide=true);
-
-  /// True iff this Shape is set to be hidden. Use hide(bool) to change this
-  /// setting
-  bool isHidden() const;
+  /// Notify that the color (rgba) of this shape has updated
+  virtual void notifyColorUpdate(const Eigen::Vector4d& color);
 
 protected:
-  /// \brief
-  virtual void computeVolume() = 0;
 
-  /// \brief
-  virtual void initMeshes() {}
+  /// \brief Update volume
+  virtual void updateVolume() = 0;
 
-  /// \brief Dimensions for bounding box.
-  Eigen::Vector3d mBoundingBoxDim;
+  /// \brief The bounding box (in the local coordinate frame) of the shape.
+  math::BoundingBox mBoundingBox;
 
   /// \brief Volume enclosed by the geometry.
   double mVolume;
@@ -204,28 +149,17 @@ protected:
   /// \brief Unique id.
   int mID;
 
-  /// \brief Color for the primitive.
-  Eigen::Vector4d mColor;
-
-  /// \brief Local geometric transformation of the Shape w.r.t. parent frame.
-  Eigen::Isometry3d mTransform;
-
   /// The DataVariance of this Shape
   unsigned int mVariance;
-
-  /// True if this shape should be kept from rendering
-  bool mHidden;
 
   /// \brief
   static int mCounter;
 
 private:
+
   /// \brief Type of primitive
   ShapeType mType;
 
-public:
-  // To get byte-aligned Eigen vectors
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 }  // namespace dynamics

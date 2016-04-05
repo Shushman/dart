@@ -45,11 +45,11 @@ MyWindow::~MyWindow() {
 }
 
 
-void MyWindow::drawSkels() {
+void MyWindow::drawWorld() const {
   glEnable(GL_LIGHTING);
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-  SimWindow::drawSkels();
+  SimWindow::drawWorld();
 }
 
 void MyWindow::keyboard(unsigned char _key, int _x, int _y) {
@@ -95,16 +95,19 @@ void MyWindow::spawnCube(const Eigen::Vector3d& _position,
   body.mName = "cube_link";
   body.mInertia.setMass(_mass);
   dart::dynamics::ShapePtr newBoxShape(new dart::dynamics::BoxShape(_size));
-  body.mVizShapes.push_back(newBoxShape);
-  body.mColShapes.push_back(newBoxShape);
-  newBoxShape->setColor(dart::math::randomVector<3>(0.0, 1.0));
 
   dart::dynamics::FreeJoint::Properties joint;
   joint.mName = "cube_joint";
   joint.mT_ParentBodyToJoint = Eigen::Translation3d(_position);
 
-  newCubeSkeleton->createJointAndBodyNodePair<dart::dynamics::FreeJoint>(
+  auto pair
+      = newCubeSkeleton->createJointAndBodyNodePair<dart::dynamics::FreeJoint>(
         nullptr, joint, body);
+  auto shapeNode = pair.second->createShapeNodeWith<
+      dart::dynamics::VisualAddon,
+      dart::dynamics::CollisionAddon,
+      dart::dynamics::DynamicsAddon>(newBoxShape);
+  shapeNode->getVisualAddon()->setColor(dart::math::randomVector<3>(0.0, 1.0));
 
   mWorld->addSkeleton(newCubeSkeleton);
 }

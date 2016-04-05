@@ -62,6 +62,7 @@ class Frame : public virtual Entity
 public:
   friend class Entity;
   friend class WorldFrame;
+  friend class ShapeFrame;
 
   Frame(const Frame&) = delete;
 
@@ -228,18 +229,11 @@ public:
   /// Get the number of Frames that are currently children of this Frame.
   size_t getNumChildFrames() const;
 
+  /// Returns true if this Frame is a ShapeFrame
+  bool isShapeFrame() const;
+
   /// Returns true if this Frame is the World Frame
   bool isWorld() const;
-
-  //--------------------------------------------------------------------------
-  // Rendering
-  //--------------------------------------------------------------------------
-
-  // Render this Frame as well as any Entities it contains
-  virtual void draw(
-      renderer::RenderInterface *_ri = nullptr,
-      const Eigen::Vector4d &_color = Eigen::Vector4d::Ones(),
-      bool _useDefaultColor = true, int _depth = 0) const override;
 
   /// Notify this Frame and all its children that its pose has changed
   virtual void notifyTransformUpdate() override;
@@ -308,6 +302,9 @@ protected:
 private:
   /// Contains whether or not this is the World Frame
   const bool mAmWorld;
+
+  /// Contains whether or not this is a ShapeFrame
+  bool mAmShapeFrame;
 
 public:
   // To get byte-aligned Eigen vectors

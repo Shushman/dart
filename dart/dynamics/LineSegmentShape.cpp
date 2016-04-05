@@ -36,7 +36,6 @@
 
 #include "dart/dynamics/LineSegmentShape.h"
 #include "dart/common/Console.h"
-#include "dart/renderer/RenderInterface.h"
 #include "dart/math/Geometry.h"
 
 namespace dart {
@@ -56,7 +55,7 @@ LineSegmentShape::LineSegmentShape(float _thickness)
     mThickness = 1.0f;
   }
 
-  computeVolume();
+  updateVolume();
   mVariance = DYNAMIC_VERTICES;
 }
 
@@ -77,7 +76,7 @@ LineSegmentShape::LineSegmentShape(const Eigen::Vector3d& _v1,
 
   addVertex(_v1);
   addVertex(_v2);
-  computeVolume();
+  updateVolume();
   mVariance = DYNAMIC_VERTICES;
 }
 
@@ -277,28 +276,6 @@ LineSegmentShape::getConnections() const
 }
 
 //==============================================================================
-void LineSegmentShape::draw(renderer::RenderInterface* _ri,
-                            const Eigen::Vector4d& _color,
-                            bool _useDefaultColor) const
-{
-  if(!_ri)
-    return;
-
-  if(mHidden)
-    return;
-
-  if(!_useDefaultColor)
-    _ri->setPenColor(_color);
-  else
-    _ri->setPenColor(mColor);
-
-  _ri->pushMatrix();
-  _ri->transform(mTransform);
-  _ri->drawLineSegments(mVertices, mConnections);
-  _ri->popMatrix();
-}
-
-//==============================================================================
 Eigen::Matrix3d LineSegmentShape::computeInertia(double _mass) const
 {
   Eigen::Matrix3d inertia = Eigen::Matrix3d::Zero();
@@ -314,8 +291,8 @@ Eigen::Matrix3d LineSegmentShape::computeInertia(double _mass) const
 
   for(const Eigen::Vector2i& c : mConnections)
   {
-    const Eigen::Vector3d& v0 = mTransform * mVertices[c[0]];
-    const Eigen::Vector3d& v1 = mTransform * mVertices[c[1]];
+    const Eigen::Vector3d& v0 = mVertices[c[0]];
+    const Eigen::Vector3d& v1 = mVertices[c[1]];
 
     double radius = 1e-6;
     double height = (v1-v0).norm();
@@ -362,9 +339,9 @@ Eigen::Matrix3d LineSegmentShape::computeInertia(double _mass) const
 }
 
 //==============================================================================
-void LineSegmentShape::computeVolume()
+void LineSegmentShape::updateVolume()
 {
-  mVolume = 0;
+  mVolume = 0.0;
 }
 
 } // namespace dynamics

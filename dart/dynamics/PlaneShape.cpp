@@ -36,8 +36,6 @@
 
 #include "dart/dynamics/PlaneShape.h"
 
-#include "dart/renderer/RenderInterface.h"
-
 namespace dart {
 namespace dynamics {
 
@@ -59,28 +57,9 @@ PlaneShape::PlaneShape(const Eigen::Vector3d& _normal,
 }
 
 //==============================================================================
-void PlaneShape::draw(renderer::RenderInterface* _ri,
-                      const Eigen::Vector4d& _color,
-                      bool _useDefaultColor) const
+Eigen::Matrix3d PlaneShape::computeInertia(double /*mass*/) const
 {
-  // TODO(JS): Not implemented yet
-  if (!_ri) return;
-  if (mHidden) return;
-  if (!_useDefaultColor)
-    _ri->setPenColor(_color);
-  else
-    _ri->setPenColor(mColor);
-  _ri->pushMatrix();
-  _ri->transform(mTransform);
-//  _ri->drawCube(mDim);
-  _ri->popMatrix();
-}
-
-//==============================================================================
-Eigen::Matrix3d PlaneShape::computeInertia(double _mass) const
-{
-  Eigen::Matrix3d inertia = Eigen::Matrix3d::Zero();
-  return inertia;
+  return Eigen::Matrix3d::Zero();
 }
 
 //==============================================================================
@@ -136,7 +115,7 @@ double PlaneShape::computeSignedDistance(const Eigen::Vector3d& _point) const
 }
 
 //==============================================================================
-void PlaneShape::computeVolume()
+void PlaneShape::updateVolume()
 {
   mVolume = 0.0;
 }

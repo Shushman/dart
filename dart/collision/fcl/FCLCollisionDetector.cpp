@@ -220,9 +220,9 @@ bool FCLCollisionDetector::detectCollision(bool /*_checkAllCollisions*/,
 }
 
 //==============================================================================
-bool FCLCollisionDetector::detectCollision(CollisionNode* _node1,
-                                           CollisionNode* _node2,
-                                           bool _calculateContactPoints)
+bool FCLCollisionDetector::detectCollision(CollisionNode* /*_node1*/,
+                                           CollisionNode* /*_node2*/,
+                                           bool /*_calculateContactPoints*/)
 {
   // TODO(JS): function not implemented
   assert(false);
@@ -257,7 +257,9 @@ CollisionNode* FCLCollisionDetector::findCollisionNode(
 FCLCollisionNode* FCLCollisionDetector::findCollisionNode(
     const fcl::CollisionObject* _fclCollObj) const
 {
-  FCLUserData* userData = static_cast<FCLUserData*>(_fclCollObj->getUserData());
+  FCLCollisionNode::FCLUserData* userData
+      = static_cast<FCLCollisionNode::FCLUserData*>(_fclCollObj->getUserData());
+
   return userData->fclCollNode;
 }
 

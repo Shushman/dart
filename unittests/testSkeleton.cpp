@@ -96,33 +96,6 @@ std::vector<SkeletonPtr> getSkeletons()
   return skeletons;
 }
 
-void check_self_consistency(SkeletonPtr skeleton)
-{
-  for(size_t i=0; i<skeleton->getNumBodyNodes(); ++i)
-  {
-    BodyNode* bn = skeleton->getBodyNode(i);
-    EXPECT_TRUE(bn->getIndexInSkeleton() == i);
-    EXPECT_TRUE(skeleton->getBodyNode(bn->getName()) == bn);
-
-    Joint* joint = bn->getParentJoint();
-    EXPECT_TRUE(skeleton->getJoint(joint->getName()) == joint);
-
-    for(size_t j=0; j<joint->getNumDofs(); ++j)
-    {
-      DegreeOfFreedom* dof = joint->getDof(j);
-      EXPECT_TRUE(dof->getIndexInJoint() == j);
-      EXPECT_TRUE(skeleton->getDof(dof->getName()) == dof);
-    }
-  }
-
-  for(size_t i=0; i<skeleton->getNumDofs(); ++i)
-  {
-    DegreeOfFreedom* dof = skeleton->getDof(i);
-    EXPECT_TRUE(dof->getIndexInSkeleton() == i);
-    EXPECT_TRUE(skeleton->getDof(dof->getName()) == dof);
-  }
-}
-
 void constructSubtree(std::vector<BodyNode*>& _tree, BodyNode* bn)
 {
   _tree.push_back(bn);
@@ -140,13 +113,18 @@ TEST(Skeleton, Restructuring)
   size_t numIterations = 2*skeletons.size();
 #endif
 
+  for(const auto& skeleton : skeletons)
+    EXPECT_TRUE(skeleton->checkIndexingConsistency());
+
   // Test moves within the current Skeleton
   for(size_t i=0; i<numIterations; ++i)
   {
     size_t index = floor(math::random(0, skeletons.size()));
     index = std::min(index, skeletons.size()-1);
     SkeletonPtr skeleton = skeletons[index];
+    EXPECT_TRUE(skeleton->checkIndexingConsistency());
     SkeletonPtr original = skeleton->clone();
+    EXPECT_TRUE(original->checkIndexingConsistency());
 
     size_t maxNode = skeleton->getNumBodyNodes()-1;
     BodyNode* bn1 = skeleton->getBodyNode(floor(math::random(0, maxNode)));
@@ -268,6 +246,8 @@ TEST(Skeleton, Restructuring)
 
     // Move to a new Skeleton
     childBn->moveTo(parentBn);
+    EXPECT_TRUE(childBn->getSkeleton()->checkIndexingConsistency());
+    EXPECT_TRUE(parentBn->getSkeleton()->checkIndexingConsistency());
 
     // Make sure all the objects have moved
     for(size_t j=0; j<subtree.size(); ++j)
@@ -327,12 +307,12 @@ TEST(Skeleton, Restructuring)
     }
 
     // Check that the mangled Skeletons are all self-consistent
-    check_self_consistency(fromSkel);
-    check_self_consistency(toSkel);
-    check_self_consistency(temporary);
-    check_self_consistency(other_temporary);
-    check_self_consistency(another_temporary);
-    check_self_consistency(last_temporary);
+    EXPECT_TRUE(fromSkel->checkIndexingConsistency());
+    EXPECT_TRUE(toSkel->checkIndexingConsistency());
+    EXPECT_TRUE(temporary->checkIndexingConsistency());
+    EXPECT_TRUE(other_temporary->checkIndexingConsistency());
+    EXPECT_TRUE(another_temporary->checkIndexingConsistency());
+    EXPECT_TRUE(last_temporary->checkIndexingConsistency());
   }
 }
 
@@ -560,41 +540,75 @@ TEST(Skeleton, Persistence)
   EXPECT_TRUE(weakSkel.lock() == nullptr);
 }
 
+class GenericNode final : public dart::dynamics::Node,
+                          public AccessoryNode<GenericNode>
+{
+public:
+
+  GenericNode(BodyNode* bn, const std::string& name)
+    : Node(bn), mName(name) { }
+
+  const std::string& setName(const std::string& newName) override
+  {
+    mName = registerNameChange(newName);
+    return mName;
+  }
+
+  const std::string& getName() const override
+  {
+    return mName;
+  }
+
+protected:
+
+  Node* cloneNode(BodyNode* bn) const override
+  {
+    return new GenericNode(bn, mName);
+  }
+
+  std::string mName;
+};
+
 TEST(Skeleton, NodePersistence)
 {
   SkeletonPtr skel = Skeleton::create();
   skel->createJointAndBodyNodePair<FreeJoint>(nullptr);
 
+  //--------------------------------------------------------------------------
+  // Testing EndEffector, which is a specialized Node type
+  //--------------------------------------------------------------------------
   {
-    EndEffector* manip =
-        skel->getBodyNode(0)->createEndEffector(Entity::Properties("manip"));
+    EndEffector* manip = skel->getBodyNode(0)->createEndEffector("manip");
 
-    EXPECT_TRUE(skel->getEndEffector("manip") == manip);
-    EXPECT_TRUE(skel->getEndEffector(0) == manip);
-    EXPECT_TRUE(skel->getBodyNode(0)->getEndEffector(0) == manip);
+    // Test both methods of adding a Support to an EndEffector
+    manip->create<Support>();
+    manip->createSupport();
+
+    EXPECT_EQ(skel->getEndEffector("manip"), manip);
+    EXPECT_EQ(skel->getEndEffector(0), manip);
+//    EXPECT_EQ(skel->getBodyNode(0)->getEndEffector(0), manip);
 
     WeakEndEffectorPtr weakManip = manip;
 
-    EXPECT_FALSE(weakManip.lock() == nullptr);
+    EXPECT_NE(weakManip.lock(), nullptr);
 
     manip->remove();
 
     // The Node has been removed, and no strong reference to it exists, so it
     // should be gone from the Skeleton
-    EXPECT_TRUE(skel->getEndEffector("manip") == nullptr);
-    EXPECT_TRUE(skel->getNumEndEffectors() == 0);
-    EXPECT_TRUE(skel->getBodyNode(0)->getNumEndEffectors() == 0);
+    EXPECT_EQ(skel->getEndEffector("manip"), nullptr);
+    EXPECT_EQ(skel->getNumEndEffectors(), 0u);
+//    EXPECT_EQ(skel->getBodyNode(0)->getNumEndEffectors(), 0u);
 
-    EXPECT_TRUE(weakManip.lock() == nullptr);
+    EXPECT_EQ(weakManip.lock(), nullptr);
   }
 
   {
-    EndEffector* manip =
-        skel->getBodyNode(0)->createEndEffector(Entity::Properties("manip"));
+    EndEffector* manip = skel->getBodyNode(0)->createEndEffector("manip");
 
-    EXPECT_TRUE(skel->getEndEffector("manip") == manip);
-    EXPECT_TRUE(skel->getEndEffector(0) == manip);
-    EXPECT_TRUE(skel->getBodyNode(0)->getEndEffector(0) == manip);
+    EXPECT_EQ(skel->getEndEffector("manip"), manip);
+    EXPECT_EQ(skel->getEndEffector(0), manip);
+//    EXPECT_EQ(skel->getBodyNode(0)->getEndEffector(0), manip);
 
     EndEffectorPtr strongManip = manip;
     WeakEndEffectorPtr weakManip = strongManip;
@@ -603,24 +617,157 @@ TEST(Skeleton, NodePersistence)
 
     manip->remove();
 
-    // The Node has been removed, but a strong reference to it still exists, so
-    // it will remain in the Skeleton for now
-    EXPECT_TRUE(skel->getEndEffector("manip") == manip);
-    EXPECT_TRUE(skel->getEndEffector(0) == manip);
-    EXPECT_TRUE(skel->getBodyNode(0)->getEndEffector(0) == manip);
+    // The Node has been removed, so no reference to it will exist in the
+    // Skeleton
+#ifdef NDEBUG // Release Mode
+    EXPECT_NE(skel->getEndEffector("manip"), manip);
+    EXPECT_EQ(skel->getEndEffector("manip"), nullptr);
 
-    EXPECT_FALSE(weakManip.lock() == nullptr);
+    EXPECT_NE(skel->getEndEffector(0), manip);
+    EXPECT_EQ(skel->getEndEffector(0), nullptr);
+#endif        // Release Mode
+
+#ifdef NDEBUG // Release Mode
+    // But it will not remain in the BodyNode's indexing.
+    // Note: We should only run this test in release mode, because otherwise it
+    // will trigger an assertion.
+//    EXPECT_NE(skel->getBodyNode(0)->getEndEffector(0), manip);
+//    EXPECT_EQ(skel->getBodyNode(0)->getEndEffector(0), nullptr);
+#endif        // Release Mode
+
+    EXPECT_NE(weakManip.lock(), nullptr);
 
     strongManip = nullptr;
 
     // The Node has been removed, and no strong reference to it exists any
     // longer, so it should be gone from the Skeleton
-    EXPECT_TRUE(skel->getEndEffector("manip") == nullptr);
-    EXPECT_TRUE(skel->getNumEndEffectors() == 0);
-    EXPECT_TRUE(skel->getBodyNode(0)->getNumEndEffectors() == 0);
+    EXPECT_EQ(skel->getEndEffector("manip"), nullptr);
+    EXPECT_EQ(skel->getNumEndEffectors(), 0u);
+//    EXPECT_EQ(skel->getBodyNode(0)->getNumEndEffectors(), 0u);
 
-    EXPECT_TRUE(weakManip.lock() == nullptr);
+    EXPECT_EQ(weakManip.lock(), nullptr);
   }
+
+  using GenericNodePtr = TemplateNodePtr<GenericNode, BodyNode>;
+  using WeakGenericNodePtr = TemplateWeakNodePtr<GenericNode, BodyNode>;
+  //--------------------------------------------------------------------------
+  // Testing GenericNode, which is NOT a specialized Node type
+  //--------------------------------------------------------------------------
+  {
+    GenericNode* node =
+        skel->getBodyNode(0)->createNode<GenericNode>("node");
+
+    EXPECT_EQ(skel->getNode<GenericNode>("node"), node);
+    EXPECT_EQ(skel->getNode<GenericNode>(0), node);
+    EXPECT_EQ(skel->getBodyNode(0)->getNode<GenericNode>(0), node);
+
+    WeakGenericNodePtr weakNode = node;
+
+    EXPECT_NE(weakNode.lock(), nullptr);
+
+    node->remove();
+
+    // The Node has been removed, and no strong reference to it exists, so it
+    // should be gone from the Skeleton
+    EXPECT_EQ(skel->getNode<GenericNode>("node"), nullptr);
+    EXPECT_EQ(skel->getNumNodes<GenericNode>(), 0u);
+    EXPECT_EQ(skel->getBodyNode(0)->getNumNodes<GenericNode>(), 0u);
+
+    EXPECT_EQ(weakNode.lock(), nullptr);
+  }
+
+  {
+    GenericNode* node =
+        skel->getBodyNode(0)->createNode<GenericNode>("node");
+
+    EXPECT_EQ(skel->getNode<GenericNode>("node"), node);
+    EXPECT_EQ(skel->getNode<GenericNode>(0), node);
+    EXPECT_EQ(skel->getBodyNode(0)->getNode<GenericNode>(0), node);
+
+    GenericNodePtr strongNode = node;
+    WeakGenericNodePtr weakNode = strongNode;
+
+    EXPECT_FALSE(weakNode.lock() == nullptr);
+
+    node->remove();
+
+    // The Node has been removed, so no reference to it will exist in the
+    // Skeleton
+#ifdef NDEBUG // Release Mode
+    EXPECT_NE(skel->getNode<GenericNode>("node"), node);
+    EXPECT_EQ(skel->getNode<GenericNode>("node"), nullptr);
+
+    EXPECT_NE(skel->getNode<GenericNode>(0), node);
+    EXPECT_EQ(skel->getNode<GenericNode>(0), nullptr);
+#endif        // Release Mode
+
+#ifdef NDEBUG // Release Mode
+    // But it will not remain in the BodyNode's indexing.
+    // Note: We should only run this test in release mode, because otherwise it
+    // will trigger an assertion.
+    EXPECT_NE(skel->getBodyNode(0)->getNode<GenericNode>(0), node);
+    EXPECT_EQ(skel->getBodyNode(0)->getNode<GenericNode>(0), nullptr);
+#endif        // Release Mode
+
+    EXPECT_NE(weakNode.lock(), nullptr);
+
+    strongNode = nullptr;
+
+    // The Node has been removed, and no strong reference to it exists any
+    // longer, so it should be gone from the Skeleton
+    EXPECT_EQ(skel->getNode<GenericNode>("node"), nullptr);
+    EXPECT_EQ(skel->getNumNodes<GenericNode>(), 0u);
+    EXPECT_EQ(skel->getBodyNode(0)->getNumNodes<GenericNode>(), 0u);
+
+    EXPECT_EQ(weakNode.lock(), nullptr);
+  }
+}
+
+TEST(Skeleton, CloneNodeOrdering)
+{
+  // This test checks that the ordering of Nodes in a cloned Skeleton will match
+  // the ordering of Nodes in the original that was copied.
+
+  SkeletonPtr skel = Skeleton::create();
+  skel->createJointAndBodyNodePair<FreeJoint>(nullptr);
+  skel->createJointAndBodyNodePair<FreeJoint>(nullptr);
+  skel->createJointAndBodyNodePair<FreeJoint>(nullptr);
+
+  // Add Nodes in the reverse order, so that their indexing is different from
+  // the BodyNodes they are attached to
+  for(int i=skel->getNumBodyNodes()-1; i > 0; --i)
+  {
+    skel->getBodyNode(i)->createEndEffector("manip_"+std::to_string(i));
+  }
+
+  skel->getBodyNode(1)->createEndEffector("other_manip");
+  skel->getBodyNode(0)->createEndEffector("another_manip");
+  skel->getBodyNode(2)->createEndEffector("yet_another_manip");
+
+  SkeletonPtr clone = skel->clone();
+
+  for(size_t i=0; i < skel->getNumEndEffectors(); ++i)
+  {
+    EXPECT_EQ(skel->getEndEffector(i)->getName(),
+              clone->getEndEffector(i)->getName());
+  }
+}
+
+TEST(Skeleton, ZeroDofJointInReferential)
+{
+  // This is a regression test which makes sure that the BodyNodes of
+  // ZeroDofJoints will be correctly included in linkages.
+  SkeletonPtr skel = Skeleton::create();
+
+  BodyNode* bn = skel->createJointAndBodyNodePair<RevoluteJoint>().second;
+  BodyNode* zeroDof1 = skel->createJointAndBodyNodePair<WeldJoint>(bn).second;
+  bn = skel->createJointAndBodyNodePair<PrismaticJoint>(zeroDof1).second;
+  BodyNode* zeroDof2 = skel->createJointAndBodyNodePair<WeldJoint>(bn).second;
+
+  BranchPtr branch = Branch::create(skel->getBodyNode(0));
+  EXPECT_EQ(branch->getNumBodyNodes(), skel->getNumBodyNodes());
+  EXPECT_FALSE(branch->getIndexOf(zeroDof1) == INVALID_INDEX);
+  EXPECT_FALSE(branch->getIndexOf(zeroDof2) == INVALID_INDEX);
 }
 
 TEST(Skeleton, Referential)
@@ -837,6 +984,19 @@ size_t checkForBodyNodes(
   return count;
 }
 
+void checkLinkageJointConsistency(const ReferentialSkeletonPtr& refSkel)
+{
+  EXPECT_TRUE(refSkel->getNumBodyNodes() == refSkel->getNumJoints());
+
+  // Linkages should have the property:
+  // getJoint(i) == getBodyNode(i)->getParentJoint()
+  for(size_t i=0; i < refSkel->getNumJoints(); ++i)
+  {
+    EXPECT_EQ(refSkel->getJoint(i), refSkel->getBodyNode(i)->getParentJoint());
+    EXPECT_EQ(refSkel->getIndexOf(refSkel->getJoint(i)), i);
+  }
+}
+
 TEST(Skeleton, Linkage)
 {
   // Test a variety of uses of Linkage::Criteria
@@ -849,6 +1009,7 @@ TEST(Skeleton, Linkage)
   ChainPtr midchain = Chain::create(skel->getBodyNode("c1b3"),
                  skel->getBodyNode("c3b4"), "midchain");
   checkForBodyNodes(midchain, skel, true, "c3b1", "c3b2", "c3b3");
+  checkLinkageJointConsistency(midchain);
 
   Linkage::Criteria criteria;
   criteria.mStart = skel->getBodyNode("c5b2");
@@ -857,6 +1018,7 @@ TEST(Skeleton, Linkage)
   LinkagePtr path = Linkage::create(criteria, "path");
   checkForBodyNodes(path, skel, true, "c5b2", "c5b1", "c1b3", "c3b1", "c3b2",
                                       "c3b3", "c4b1", "c4b2", "c4b3");
+  checkLinkageJointConsistency(path);
 
   skel->getBodyNode(0)->copyTo(nullptr);
   criteria.mTargets.clear();
@@ -872,6 +1034,7 @@ TEST(Skeleton, Linkage)
                     "c3b1(1)", "c1b3(1)", "c2b1(1)", "c2b2(1)", "c2b3(1)",
                     "c5b1",    "c5b2",    "c1b2",    "c1b1",
                     "c5b1(1)", "c5b2(1)", "c1b2(1)", "c1b1(1)");
+  checkLinkageJointConsistency(combinedTreeBases);
 
   SkeletonPtr skel2 = skel->getBodyNode(0)->copyAs("skel2");
   criteria.mTargets.clear();
@@ -891,23 +1054,28 @@ TEST(Skeleton, Linkage)
   ChainPtr downstreamFreeJoint = Chain::create(skel->getBodyNode("c1b1"),
       skel->getBodyNode("c1b3"), Chain::IncludeBoth, "downstreamFreeJoint");
   checkForBodyNodes(downstreamFreeJoint, skel, true, "c1b1");
+  checkLinkageJointConsistency(downstreamFreeJoint);
 
   ChainPtr emptyChain = Chain::create(skel->getBodyNode("c1b1"),
       skel->getBodyNode("c1b3"), "emptyChain");
   checkForBodyNodes(emptyChain, skel, true);
+  checkLinkageJointConsistency(emptyChain);
 
   ChainPtr chainFromNull = Chain::create(nullptr, skel->getBodyNode("c1b2"),
                                          "chainFromNull");
   checkForBodyNodes(chainFromNull, skel, true, "c1b1");
+  checkLinkageJointConsistency(chainFromNull);
 
   ChainPtr upstreamFreeJoint = Chain::create(skel->getBodyNode("c1b3"),
                           skel->getBodyNode("c1b1"), "upstreamFreeJoint");
   checkForBodyNodes(upstreamFreeJoint, skel, true, "c1b3", "c1b2");
+  checkLinkageJointConsistency(upstreamFreeJoint);
 
   // Using nullptr as the target should bring us towards the root of the tree
   ChainPtr upTowardsRoot =
       Chain::create(skel->getBodyNode("c1b3"), nullptr, "upTowardsRoot");
   checkForBodyNodes(upTowardsRoot, skel, true, "c1b3", "c1b2");
+  checkLinkageJointConsistency(upTowardsRoot);
 
   criteria.mTargets.clear();
   criteria.mTargets.push_back(skel->getBodyNode("c4b3"));
@@ -916,6 +1084,7 @@ TEST(Skeleton, Linkage)
   LinkagePtr terminatedLinkage = Linkage::create(criteria, "terminatedLinkage");
   checkForBodyNodes(terminatedLinkage, skel, true,
                     "c1b3", "c3b1", "c3b2");
+  checkLinkageJointConsistency(terminatedLinkage);
 
   criteria.mStart = skel->getBodyNode("c1b1");
   criteria.mStart.mPolicy = Linkage::Criteria::DOWNSTREAM;
@@ -928,12 +1097,124 @@ TEST(Skeleton, Linkage)
   checkForBodyNodes(terminatedSubtree, skel, true,
                     "c1b1", "c1b2", "c1b3", "c5b1",
                     "c5b2", "c3b1", "c3b2", "c3b3");
+  checkLinkageJointConsistency(terminatedSubtree);
 
   criteria.mStart.mPolicy = Linkage::Criteria::UPSTREAM;
   criteria.mStart.mNode = skel->getBodyNode("c3b1");
   LinkagePtr terminatedUpstream = Linkage::create(criteria, "terminatedUpstream");
   checkForBodyNodes(terminatedUpstream, skel, true,
                     "c3b1", "c1b3", "c5b1", "c5b2", "c1b2", "c1b1");
+  checkLinkageJointConsistency(terminatedUpstream);
+}
+
+TEST(Skeleton, Group)
+{
+  SkeletonPtr skel = constructLinkageTestSkeleton();
+
+  // Make twice as many BodyNodes in the Skeleton
+  SkeletonPtr skel2 = constructLinkageTestSkeleton();
+  skel2->getRootBodyNode()->moveTo(skel, nullptr);
+
+  // Test nullptr construction
+  GroupPtr nullGroup = Group::create("null_group", nullptr);
+  EXPECT_EQ(nullGroup->getNumBodyNodes(), 0u);
+  EXPECT_EQ(nullGroup->getNumJoints(), 0u);
+  EXPECT_EQ(nullGroup->getNumDofs(), 0u);
+
+  // Test conversion from Skeleton
+  GroupPtr skel1Group = Group::create("skel1_group", skel);
+  EXPECT_EQ(skel1Group->getNumBodyNodes(), skel->getNumBodyNodes());
+  EXPECT_EQ(skel1Group->getNumJoints(), skel->getNumJoints());
+  EXPECT_EQ(skel1Group->getNumDofs(), skel->getNumDofs());
+
+  for(size_t i=0; i < skel1Group->getNumBodyNodes(); ++i)
+    EXPECT_EQ(skel1Group->getBodyNode(i), skel->getBodyNode(i));
+
+  for(size_t i=0; i < skel1Group->getNumJoints(); ++i)
+    EXPECT_EQ(skel1Group->getJoint(i), skel->getJoint(i));
+
+  for(size_t i=0; i < skel1Group->getNumDofs(); ++i)
+    EXPECT_EQ(skel1Group->getDof(i), skel->getDof(i));
+
+  // Test arbitrary Groups by plucking random BodyNodes, Joints, and
+  // DegreesOfFreedom from a Skeleton.
+  GroupPtr group = Group::create();
+  std::vector<BodyNode*> bodyNodes;
+  std::vector<Joint*> joints;
+  std::vector<DegreeOfFreedom*> dofs;
+  for(size_t i=0; i < 2*skel->getNumBodyNodes(); ++i)
+  {
+    size_t randomIndex = floor(random(0, skel->getNumBodyNodes()));
+    BodyNode* bn = skel->getBodyNode(randomIndex);
+    if(group->addBodyNode(bn, false))
+      bodyNodes.push_back(bn);
+
+    randomIndex = floor(random(0, skel->getNumJoints()));
+    Joint* joint = skel->getJoint(randomIndex);
+    if(group->addJoint(joint, false, false))
+      joints.push_back(joint);
+
+    randomIndex = floor(random(0, skel->getNumDofs()));
+    DegreeOfFreedom* dof = skel->getDof(randomIndex);
+    if(group->addDof(dof, false, false))
+      dofs.push_back(dof);
+  }
+
+  EXPECT_EQ(group->getNumBodyNodes(), bodyNodes.size());
+  EXPECT_EQ(group->getNumJoints(), joints.size());
+  EXPECT_EQ(group->getNumDofs(), dofs.size());
+
+  for(size_t i=0; i < group->getNumBodyNodes(); ++i)
+    EXPECT_EQ(group->getBodyNode(i), bodyNodes[i]);
+
+  for(size_t i=0; i < group->getNumJoints(); ++i)
+    EXPECT_EQ(group->getJoint(i), joints[i]);
+
+  for(size_t i=0; i < group->getNumDofs(); ++i)
+    EXPECT_EQ(group->getDof(i), dofs[i]);
+}
+
+TEST(Skeleton, Configurations)
+{
+  SkeletonPtr twoLink = createTwoLinkRobot(Vector3d::Ones(), DOF_YAW,
+                                           Vector3d::Ones(), DOF_ROLL);
+
+  SkeletonPtr threeLink = createThreeLinkRobot(Vector3d::Ones(), DOF_PITCH,
+                                               Vector3d::Ones(), DOF_ROLL,
+                                               Vector3d::Ones(), DOF_YAW);
+
+  Skeleton::Configuration c2 = twoLink->getConfiguration();
+  Skeleton::Configuration c3 = threeLink->getConfiguration();
+
+  EXPECT_FALSE(c2 == c3);
+  EXPECT_TRUE(c2 == c2);
+  EXPECT_TRUE(c3 == c3);
+  EXPECT_TRUE(c2 != c3);
+
+  twoLink->setPosition(0, 1.0);
+  EXPECT_FALSE(c2 == twoLink->getConfiguration());
+
+  threeLink->setPosition(1, 2.0);
+  EXPECT_FALSE(c3 == twoLink->getConfiguration());
+
+  c2 = twoLink->getConfiguration(Skeleton::CONFIG_VELOCITIES);
+  EXPECT_TRUE(c2.mPositions.size() == 0);
+  EXPECT_TRUE(c2.mVelocities.size() == static_cast<int>(twoLink->getNumDofs()));
+  EXPECT_TRUE(c2.mAccelerations.size() == 0);
+}
+
+TEST(Skeleton, LinearJacobianDerivOverload)
+{
+  // Regression test for #626: Make sure that getLinearJacobianDeriv's overload
+  // is working appropriately.
+  SkeletonPtr skeleton = createThreeLinkRobot(Vector3d::Ones(), DOF_PITCH,
+                                              Vector3d::Ones(), DOF_ROLL,
+                                              Vector3d::Ones(), DOF_YAW);
+
+  skeleton->getLinearJacobianDeriv(skeleton->getBodyNode(0));
+
+  LinkagePtr linkage = Branch::create(skeleton->getBodyNode(0));
+  linkage->getLinearJacobianDeriv(linkage->getBodyNode(0));
 }
 
 int main(int argc, char* argv[])

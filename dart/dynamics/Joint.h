@@ -44,14 +44,10 @@
 
 #include "dart/common/Deprecated.h"
 #include "dart/common/Subject.h"
+#include "dart/common/VersionCounter.h"
+#include "dart/common/AddonManager.h"
 #include "dart/math/MathTypes.h"
 #include "dart/dynamics/SmartPointer.h"
-
-namespace dart {
-namespace renderer {
-class RenderInterface;
-}  // namespace renderer
-}  // namespace dart
 
 namespace dart {
 namespace dynamics {
@@ -61,9 +57,12 @@ class Skeleton;
 class DegreeOfFreedom;
 
 /// class Joint
-class Joint : public virtual common::Subject
+class Joint : public virtual common::Subject,
+              public virtual common::VersionCounter,
+              public virtual common::AddonManager
 {
 public:
+
   /// Actuator type
   ///
   /// The command is taken by setCommand() or setCommands(), and the meaning of
@@ -100,7 +99,6 @@ public:
     /// The constraint solver will try to track the desired velocity within the
     /// joint force limit. All the joint constarints are valid.
     SERVO,
-    // TODO: Not implemented yet.
 
     /// Command input is joint acceleration, and the output is joint force.
     ///
@@ -156,6 +154,24 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 
+  using AddonProperties = common::AddonManager::Properties;
+
+  struct ExtendedProperties : Properties
+  {
+    /// Composed constructor
+    ExtendedProperties(
+        const Properties& standardProperties = Properties(),
+        const AddonProperties& addonProperties = AddonProperties());
+
+    /// Composed move constructor
+    ExtendedProperties(
+        Properties&& standardProperties,
+        AddonProperties&& addonProperties);
+
+    /// Properties of all the Addons attached to this Joint
+    AddonProperties mAddonProperties;
+  };
+
   /// Default actuator type
   static const ActuatorType DefaultActuatorType;
 
@@ -190,6 +206,12 @@ public:
 
   /// Get joint name
   const std::string& getName() const;
+
+  /// Increments Skeleton version number
+  size_t incrementVersion() override;
+
+  /// Gets the Skeleton version number
+  size_t getVersion() const override;
 
   /// Gets a string representing the joint type
   virtual const std::string& getType() const = 0;
@@ -675,12 +697,21 @@ public:
   /// \sa BodyNode::updateArticulatedInertia(double).
 //  Eigen::VectorXd getDampingForces() const;
 
+
   //----------------------------------------------------------------------------
-  // Rendering
+  /// \{ \name Update Notifiers
   //----------------------------------------------------------------------------
 
-  ///
-  void applyGLTransform(renderer::RenderInterface* _ri);
+  /// Notify that a position update is needed
+  void notifyPositionUpdate();
+
+  /// Notify that a velocity update is needed
+  void notifyVelocityUpdate();
+
+  /// Notify that an acceleration update is needed
+  void notifyAccelerationUpdate();
+
+  /// \}
 
   //----------------------------------------------------------------------------
   // Friendship
@@ -892,15 +923,6 @@ protected:
 
   /// \}
 
-  /// Notify that a position update is needed
-  void notifyPositionUpdate();
-
-  /// Notify that a velocity update is needed
-  void notifyVelocityUpdate();
-
-  /// Notify that an acceleration update is needed
-  void notifyAccelerationUpdate();
-
 protected:
 
   /// Properties of this Joint
@@ -956,9 +978,21 @@ protected:
   mutable bool mIsLocalJacobianTimeDerivDirty;
 
 public:
+
   // To get byte-aligned Eigen vectors
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
+
+namespace detail {
+
+template <class AddonType>
+void JointPropertyUpdate(AddonType* addon)
+{
+  addon->getManager()->notifyPositionUpdate();
+  addon->getManager()->updateLocalJacobian();
+}
+
+} // namespace detail
 
 }  // namespace dynamics
 }  // namespace dart

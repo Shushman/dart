@@ -46,8 +46,8 @@ macro(list_contains var value)
 endmacro(list_contains)
 
 # Include and link to gtest
-include_directories(${CMAKE_SOURCE_DIR}/unittests/gtest/include)
-include_directories(${CMAKE_SOURCE_DIR}/unittests/gtest)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/unittests/gtest/include)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/unittests/gtest)
 add_library(gtest STATIC gtest/src/gtest-all.cc)
 add_library(gtest_main STATIC gtest/src/gtest_main.cc)
 target_link_libraries(gtest_main gtest)
@@ -57,15 +57,16 @@ endif()
 set_target_properties(gtest PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Compile each test file
-message(STATUS "")
-message(STATUS "[ Unit tests ]")
 file(GLOB tests "test*.cpp")
 foreach(test ${tests})
-
   # Get the name (i.e. bla.cpp => bla)
   get_filename_component(base ${test} NAME_WE)
+  list(APPEND all_tests ${base})
+
   link_directories(${DARTExt_LIBRARY_DIRS})
   add_executable(${base} ${test})
+  dart_add_unittest(${base})
+
   if(MSVC)
     target_link_libraries(${base} dart optimized gtest debug gtestd)
   else()
@@ -78,10 +79,9 @@ foreach(test ${tests})
   list_contains(contains ${base} ${dontTest})
   if(NOT contains)
     add_test(${base} ${CMAKE_BINARY_DIR}/bin/tests/${base})
-    message(STATUS "Adding test: " ${base})
   endif(NOT contains)
-
 endforeach(test)
+
 
 if(HAVE_IPOPT)
   target_link_libraries(testOptimizer dart-optimizer-ipopt ${IPOPT_LIBRARIES})

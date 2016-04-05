@@ -127,11 +127,6 @@ public:
   /// Set the Properties of this SoftBodyNode
   void setProperties(const UniqueProperties& _properties);
 
-  /// Remove all SoftBodyShapes and return the last one that was encountered
-  /// Note: This will be deprecated once VisualizationNodes and CollisionNodes
-  /// are implemented. Please see #394.
-  ShapePtr removeSoftBodyShapes();
-
   using SkeletonRefCountingBase::getSkeleton;
 
   /// Get the Properties of this SoftBodyNode
@@ -188,6 +183,9 @@ public:
   /// \brief
   const PointMass* getPointMass(size_t _idx) const;
 
+  /// Return all the point masses in this SoftBodyNode
+  const std::vector<PointMass*>& getPointMasses() const;
+
   /// \brief
   void connectPointMasses(size_t _idx1, size_t _idx2);
 
@@ -211,7 +209,8 @@ protected:
 
   /// Create a clone of this SoftBodyNode. This may only be called by the
   /// Skeleton class.
-  virtual BodyNode* clone(BodyNode* _parentBodyNode, Joint* _parentJoint) const override;
+  virtual BodyNode* clone(BodyNode* _parentBodyNode, Joint* _parentJoint,
+                          bool cloneNodes) const override;
 
   //--------------------------------------------------------------------------
   // Sub-functions for Recursive Kinematics Algorithms
@@ -273,13 +272,13 @@ protected:
 
   // Documentation inherited.
   virtual void updateJointForceID(double _timeStep,
-                                  double _withDampingForces,
-                                  double _withSpringForces) override;
+                                  bool _withDampingForces,
+                                  bool _withSpringForces) override;
 
   // Documentation inherited.
   virtual void updateJointForceFD(double _timeStep,
-                                  double _withDampingForces,
-                                  double _withSpringForces) override;
+                                  bool _withDampingForces,
+                                  bool _withSpringForces) override;
 
   // Documentation inherited.
   virtual void updateJointImpulseFD() override;
@@ -341,14 +340,6 @@ protected:
 
   virtual void clearInternalForces() override;
 
-  //--------------------------------------------------------------------------
-  // Rendering
-  //--------------------------------------------------------------------------
-  /// \brief Render the entire subtree rooted at this body node.
-  virtual void draw(renderer::RenderInterface* _ri = nullptr,
-                    const Eigen::Vector4d& _color = Eigen::Vector4d::Ones(),
-                    bool _useDefaultColor = true, int _depth = 0) const override;
-
 protected:
   /// \brief List of point masses composing deformable mesh.
   std::vector<PointMass*> mPointMasses;
@@ -360,7 +351,7 @@ protected:
   UniqueProperties mSoftP;
 
   /// \brief Soft mesh shape belonging to this node.
-  std::shared_ptr<SoftMeshShape> mSoftShape;
+  WeakShapeNodePtr mSoftShapeNode;
 
   /// Generalized inertia with point masses
   math::Inertia mI2;

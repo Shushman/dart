@@ -40,8 +40,6 @@
 #include "dart/math/Geometry.h"
 #include "dart/math/Helpers.h"
 #include "dart/dynamics/EllipsoidShape.h"
-#include "dart/renderer/RenderInterface.h"
-
 #include "dart/dynamics/SoftBodyNode.h"
 
 using namespace Eigen;
@@ -124,8 +122,7 @@ PointMass::PointMass(SoftBodyNode* _softBodyNode)
     mImpAlpha(Eigen::Vector3d::Zero()),
     mImpBeta(Eigen::Vector3d::Zero()),
     mImpF(Eigen::Vector3d::Zero()),
-    mNotifier(_softBodyNode->mNotifier),
-    mShape(new EllipsoidShape(Eigen::Vector3d(0.01, 0.01, 0.01)))
+    mNotifier(_softBodyNode->mNotifier)
 {
   assert(mParentSoftBodyNode != nullptr);
   mNotifier->notifyTransformUpdate();
@@ -134,7 +131,7 @@ PointMass::PointMass(SoftBodyNode* _softBodyNode)
 //==============================================================================
 PointMass::~PointMass()
 {
-  delete mShape;
+  // Do nothing
 }
 
 //==============================================================================
@@ -708,7 +705,7 @@ void PointMass::updateAccelerationID() const
 
 //==============================================================================
 void PointMass::updateTransmittedForceID(const Eigen::Vector3d& _gravity,
-                                bool _withExternalForces)
+                                         bool /*_withExternalForces*/)
 {
   // f = m*dv + w(parent) x m*v - fext
   mF.noalias() = getMass() * getBodyAcceleration();
@@ -903,8 +900,9 @@ void PointMass::updateConstrainedTermsFD(double _timeStep)
 }
 
 //==============================================================================
-void PointMass::aggregateMassMatrix(MatrixXd& _MCol, int _col)
+void PointMass::aggregateMassMatrix(MatrixXd& /*_MCol*/, int /*_col*/)
 {
+  // TODO(JS): Not implemented
 //  // Assign
 //  // We assume that the three generalized coordinates are in a row.
 //  int iStart = mIndexInSkeleton[0];
@@ -913,9 +911,10 @@ void PointMass::aggregateMassMatrix(MatrixXd& _MCol, int _col)
 }
 
 //==============================================================================
-void PointMass::aggregateAugMassMatrix(Eigen::MatrixXd& _MCol, int _col,
-                                       double _timeStep)
+void PointMass::aggregateAugMassMatrix(Eigen::MatrixXd& /*_MCol*/, int /*_col*/,
+                                       double /*_timeStep*/)
 {
+  // TODO(JS): Not implemented
 //  // Assign
 //  // We assume that the three generalized coordinates are in a row.
 //  int iStart = mIndexInSkeleton[0];
@@ -940,8 +939,10 @@ void PointMass::updateInvAugMassMatrix()
 }
 
 //==============================================================================
-void PointMass::aggregateInvMassMatrix(Eigen::MatrixXd& _MInvCol, int _col)
+void PointMass::aggregateInvMassMatrix(Eigen::MatrixXd& /*_MInvCol*/,
+                                       int /*_col*/)
 {
+  // TODO(JS): Not implemented
 //  // Assign
 //  // We assume that the three generalized coordinates are in a row.
 //  int iStart = mIndexInSkeleton[0];
@@ -952,9 +953,11 @@ void PointMass::aggregateInvMassMatrix(Eigen::MatrixXd& _MInvCol, int _col)
 }
 
 //==============================================================================
-void PointMass::aggregateInvAugMassMatrix(Eigen::MatrixXd& _MInvCol, int _col,
-                                          double _timeStep)
+void PointMass::aggregateInvAugMassMatrix(Eigen::MatrixXd& /*_MInvCol*/,
+                                          int /*_col*/,
+                                          double /*_timeStep*/)
 {
+  // TODO(JS): Not implemented
 //  // Assign
 //  // We assume that the three generalized coordinates are in a row.
 //  int iStart = mIndexInSkeleton[0];
@@ -966,9 +969,10 @@ void PointMass::aggregateInvAugMassMatrix(Eigen::MatrixXd& _MInvCol, int _col,
 }
 
 //==============================================================================
-void PointMass::aggregateGravityForceVector(VectorXd& _g,
-                                            const Eigen::Vector3d& _gravity)
+void PointMass::aggregateGravityForceVector(VectorXd& /*_g*/,
+                                            const Eigen::Vector3d& /*_gravity*/)
 {
+  // TODO(JS): Not implemented
 //  mG_F = mMass * (mParentSoftBodyNode->getWorldTransform().linear().transpose()
 //                  * _gravity);
 
@@ -987,9 +991,10 @@ void PointMass::updateCombinedVector()
 }
 
 //==============================================================================
-void PointMass::aggregateCombinedVector(Eigen::VectorXd& _Cg,
-                                        const Eigen::Vector3d& _gravity)
+void PointMass::aggregateCombinedVector(Eigen::VectorXd& /*_Cg*/,
+                                        const Eigen::Vector3d& /*_gravity*/)
 {
+  // TODO(JS): Not implemented
 //  mCg_F.noalias() = mMass * mCg_dV;
 //  mCg_F -= mMass
 //           * (mParentSoftBodyNode->getWorldTransform().linear().transpose()
@@ -1005,40 +1010,9 @@ void PointMass::aggregateCombinedVector(Eigen::VectorXd& _Cg,
 //==============================================================================
 void PointMass::aggregateExternalForces(VectorXd& /*_Fext*/)
 {
+  // TODO(JS): Not implemented
 //  int iStart = mIndexInSkeleton[0];
 //  _Fext->segment<3>(iStart) = mFext;
-}
-
-//==============================================================================
-void PointMass::draw(renderer::RenderInterface* _ri,
-                     const Eigen::Vector4d& _color,
-                     bool _useDefaultColor) const
-{
-  if (_ri == nullptr)
-    return;
-
-  _ri->pushMatrix();
-
-  // render the self geometry
-  //  mParentJoint->applyGLTransform(_ri);
-  Eigen::Isometry3d T = Eigen::Isometry3d::Identity();
-  T.translation() = getLocalPosition();
-  _ri->transform(T);
-  Eigen::Vector4d color1;
-  color1 << 0.8, 0.3, 0.3, 1.0;
-  mShape->draw(_ri, color1, false);
-  _ri->popMatrix();
-
-  //  _ri->pushName((unsigned)mID);
-  _ri->pushMatrix();
-  T.translation() = getRestingPosition();
-  _ri->transform(T);
-  Eigen::Vector4d color2;
-  color2 << 0.3, 0.8, 0.3, 1.0;
-  mShape->draw(_ri, color2, false);
-  _ri->popMatrix();
-  //  _ri->popName();
-
 }
 
 //==============================================================================
@@ -1048,7 +1022,7 @@ PointMassNotifier::PointMassNotifier(SoftBodyNode* _parentSoftBody,
     mNeedPartialAccelerationUpdate(true),
     mParentSoftBodyNode(_parentSoftBody)
 {
-
+  // Do nothing
 }
 
 //==============================================================================

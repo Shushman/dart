@@ -149,8 +149,8 @@ public:
     mFirstDomino = world->getSkeleton("domino");
     mFloor = world->getSkeleton("floor");
 
-    mController = std::unique_ptr<Controller>(
-          new Controller(world->getSkeleton("manipulator"), mFirstDomino));
+    mController = dart::common::make_unique<Controller>(
+        world->getSkeleton("manipulator"), mFirstDomino);
   }
 
   // Attempt to create a new domino. If the new domino would be in collision
@@ -282,8 +282,7 @@ SkeletonPtr createDomino()
         new BoxShape(Eigen::Vector3d(default_domino_depth,
                                      default_domino_width,
                                      default_domino_height)));
-  body->addVisualizationShape(box);
-  body->addCollisionShape(box);
+  body->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
 
   // Set up inertia for the domino
   dart::dynamics::Inertia inertia;
@@ -309,10 +308,9 @@ SkeletonPtr createFloor()
   double floor_height = 0.01;
   std::shared_ptr<BoxShape> box(
         new BoxShape(Eigen::Vector3d(floor_width, floor_width, floor_height)));
-  box->setColor(dart::Color::Black());
-
-  body->addVisualizationShape(box);
-  body->addCollisionShape(box);
+  auto shapeNode
+      = body->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
+  shapeNode->getVisualAddon()->setColor(dart::Color::Black());
 
   // Put the body into position
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());

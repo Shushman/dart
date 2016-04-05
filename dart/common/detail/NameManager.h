@@ -41,6 +41,7 @@
 #include <sstream>
 #include <cassert>
 #include "dart/common/Console.h"
+#include "dart/common/NameManager.h"
 
 namespace dart {
 namespace common {
@@ -53,13 +54,6 @@ NameManager<T>::NameManager(const std::string& _managerName,
     mDefaultName(_defaultName),
     mNameBeforeNumber(true),
     mPrefix(""), mInfix("("), mAffix(")")
-{
-  // Do nothing
-}
-
-//==============================================================================
-template <class T>
-NameManager<T>::~NameManager()
 {
   // Do nothing
 }
@@ -200,7 +194,7 @@ template <class T>
 void NameManager<T>::removeEntries(const std::string& _name, const T& _obj)
 {
   removeObject(_obj);
-  removeName(_name, false);
+  removeName(_name);
 }
 
 //==============================================================================

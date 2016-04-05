@@ -40,29 +40,93 @@
 
 #include <mutex>
 #include "dart/common/NameManager.h"
+#include "dart/common/VersionCounter.h"
 #include "dart/dynamics/MetaSkeleton.h"
 #include "dart/dynamics/SmartPointer.h"
 #include "dart/dynamics/HierarchicalIK.h"
-
-namespace dart {
-namespace renderer {
-class RenderInterface;
-}  // namespace renderer
-}  // namespace dart
+#include "dart/dynamics/Joint.h"
+#include "dart/dynamics/ShapeNode.h"
+#include "dart/dynamics/EndEffector.h"
+#include "dart/dynamics/detail/BodyNodeProperties.h"
+#include "dart/dynamics/SpecializedNodeManager.h"
 
 namespace dart {
 namespace dynamics {
 
-class EndEffector;
-
 /// class Skeleton
-class Skeleton : public MetaSkeleton
+class Skeleton :
+    public virtual common::VersionCounter,
+    public virtual common::AddonManager,
+    public MetaSkeleton,
+    public virtual SkeletonSpecializedFor<ShapeNode, EndEffector>
 {
 public:
 
+  enum ConfigFlag_t
+  {
+    CONFIG_NOTHING       = 0,
+    CONFIG_POSITIONS     = 1 << 1,
+    CONFIG_VELOCITIES    = 1 << 2,
+    CONFIG_ACCELERATIONS = 1 << 3,
+    CONFIG_FORCES        = 1 << 4,
+    CONFIG_COMMANDS      = 1 << 5,
+    CONFIG_ALL           = 0xFF
+  };
+
+  /// The Configuration struct represents the joint configuration of a Skeleton.
+  /// The size of each Eigen::VectorXd member in this struct must be equal to
+  /// the number of degrees of freedom in the Skeleton or it must be zero. We
+  /// assume that any Eigen::VectorXd member with zero entries should be
+  /// ignored.
+  struct Configuration
+  {
+    Configuration(
+        const Eigen::VectorXd& positions = Eigen::VectorXd(),
+        const Eigen::VectorXd& velocities = Eigen::VectorXd(),
+        const Eigen::VectorXd& accelerations = Eigen::VectorXd(),
+        const Eigen::VectorXd& forces = Eigen::VectorXd(),
+        const Eigen::VectorXd& commands = Eigen::VectorXd());
+
+    Configuration(
+        const std::vector<size_t>& indices,
+        const Eigen::VectorXd& positions = Eigen::VectorXd(),
+        const Eigen::VectorXd& velocities = Eigen::VectorXd(),
+        const Eigen::VectorXd& accelerations = Eigen::VectorXd(),
+        const Eigen::VectorXd& forces = Eigen::VectorXd(),
+        const Eigen::VectorXd& commands = Eigen::VectorXd());
+
+    /// A list of degree of freedom indices that each entry in the
+    /// Eigen::VectorXd members correspond to.
+    std::vector<size_t> mIndices;
+
+    /// Joint positions
+    Eigen::VectorXd mPositions;
+
+    /// Joint velocities
+    Eigen::VectorXd mVelocities;
+
+    /// Joint accelerations
+    Eigen::VectorXd mAccelerations;
+
+    /// Joint forces
+    Eigen::VectorXd mForces;
+
+    /// Joint commands
+    Eigen::VectorXd mCommands;
+
+    /// Equality comparison operator
+    bool operator==(const Configuration& other) const;
+
+    /// Inequality comparison operator
+    bool operator!=(const Configuration& other) const;
+  };
+
+  /// The Properties of this Skeleton which are independent of the components
+  /// within the Skeleton, such as its BodyNodes and Joints. This does not
+  /// include any Properties of the Skeleton's Addons.
   struct Properties
   {
-    /// Name
+    /// Name of the Skeleton
     std::string mName;
 
     /// If the skeleton is not mobile, its dynamic effect is equivalent
@@ -85,13 +149,54 @@ public:
     /// ignored.
     bool mEnabledAdjacentBodyCheck;
 
+    /// Version number of the Skeleton. This will get incremented each time any
+    /// Property of the Skeleton or a component within the Skeleton is changed.
+    /// If you create a custom Addon or Node, you must increment the Skeleton
+    /// version number each time one of its Properties is changed, or else the
+    /// machinery used to record Skeletons and Worlds might fail to capture its
+    /// Property changes.
+    size_t mVersion;
+
+    /// Default constructor
     Properties(
         const std::string& _name = "Skeleton",
         bool _isMobile = true,
         const Eigen::Vector3d& _gravity = Eigen::Vector3d(0.0, 0.0, -9.81),
         double _timeStep = 0.001,
         bool _enabledSelfCollisionCheck = false,
-        bool _enableAdjacentBodyCheck = false);
+        bool _enableAdjacentBodyCheck = false,
+        size_t _version = 0);
+  };
+
+  using BodyNodeExtendedProperties = std::vector<detail::BodyNodeExtendedProperties>;
+  using JointExtendedProperties = std::vector<Joint::ExtendedProperties>;
+  using AddonProperties = common::AddonManager::Properties;
+
+  /// The Properties of this Skeleton and everything within the Skeleton,
+  /// including Addons and Nodes that are attached to the
+  struct ExtendedProperties : Properties
+  {
+    /// Properties of all the BodyNodes in this Skeleton
+    BodyNodeExtendedProperties mBodyNodeProperties;
+
+    /// Properties of all the Joints in this Skeleton
+    JointExtendedProperties mJointProperties;
+
+    /// A list of the name of the parent of each BodyNode in this Skeleton. This
+    /// allows the layout of the Skeleton to be reconstructed.
+    std::vector<std::string> mParentBodyNodeNames;
+
+    /// Properties of any Addons that are attached directly to this Skeleton
+    /// object (does NOT include Addons that are attached to BodyNodes or Joints
+    /// within this Skeleton).
+    AddonProperties mAddonProperties;
+
+    /// Default constructor
+    ExtendedProperties(
+        const BodyNodeExtendedProperties& bodyNodeProperties = BodyNodeExtendedProperties(),
+        const JointExtendedProperties& jointProperties = JointExtendedProperties(),
+        const std::vector<std::string>& parentNames = std::vector<std::string>(),
+        const AddonProperties& addonProperties = AddonProperties());
   };
 
   //----------------------------------------------------------------------------
@@ -110,6 +215,14 @@ public:
   /// Get the shared_ptr that manages this Skeleton
   ConstSkeletonPtr getPtr() const;
 
+  /// Same as getPtr(), but this allows Skeleton to have a similar interface as
+  /// BodyNode and Joint for template programming.
+  SkeletonPtr getSkeleton();
+
+  /// Same as getPtr(), but this allows Skeleton to have a similar interface as
+  /// BodyNode and Joint for template programming.
+  ConstSkeletonPtr getSkeleton() const;
+
   /// Get the mutex that protects the state of this Skeleton
   std::mutex& getMutex() const;
 
@@ -127,7 +240,27 @@ public:
   /// properties will be [TODO(MXG): copy the state as well]
   SkeletonPtr clone() const;
 
+  /// Create an identical clone of this Skeleton, except that it has a new name.
+  ///
+  /// Note: the state of the Skeleton will NOT be cloned, only the structure and
+  /// properties will be [TODO(MXG): copy the state as well]
+  SkeletonPtr clone(const std::string& cloneName) const;
+
   /// \}
+
+  //----------------------------------------------------------------------------
+  /// \{ \name Configuration
+  //----------------------------------------------------------------------------
+
+  /// Set the configuration of this Skeleton
+  void setConfiguration(const Configuration& configuration);
+
+  /// Get the configuration of this Skeleton
+  Configuration getConfiguration(int flags = CONFIG_ALL) const;
+
+  /// Get the configuration of the specified indices in this Skeleton
+  Configuration getConfiguration(const std::vector<size_t>& indices,
+                                 int flags = CONFIG_ALL) const;
 
   //----------------------------------------------------------------------------
   /// \{ \name Properties
@@ -179,6 +312,13 @@ public:
 
   /// Get 3-dim gravitational acceleration.
   const Eigen::Vector3d& getGravity() const;
+
+  /// Increment the version number of this Skeleton and return the resulting
+  /// (new) version number.
+  size_t incrementVersion() override;
+
+  /// Get the current version number of this Skeleton
+  size_t getVersion() const override;
 
   /// \}
 
@@ -328,20 +468,10 @@ public:
   /// Get the DegreesOfFreedom belonging to a tree in this Skeleton
   const std::vector<const DegreeOfFreedom*>& getTreeDofs(size_t _treeIdx) const;
 
-  /// Get the number of EndEffectors on this Skeleton
-  size_t getNumEndEffectors() const;
-
-  /// Get EndEffector whose index is _idx
-  EndEffector* getEndEffector(size_t _idx);
-
-  /// Get EndEffector whose index is _idx
-  const EndEffector* getEndEffector(size_t _idx) const;
-
-  /// Get EndEffector whose name is _name
-  EndEffector* getEndEffector(const std::string& _name);
-
-  /// Get EndEffector whose name is _name
-  const EndEffector* getEndEffector(const std::string &_name) const;
+  /// This function is only meant for debugging purposes. It will verify that
+  /// all objects held in the Skeleton have the correct information about their
+  /// indexing.
+  bool checkIndexingConsistency() const;
 
   /// Get a pointer to a WholeBodyIK module for this Skeleton. If _createIfNull
   /// is true, then the IK module will be generated if one does not already
@@ -367,11 +497,18 @@ public:
   /// nullptr
   void clearIK();
 
+  /// Get total number of markers in this Skeleton
+  size_t getNumMarkers() const;
+
   /// Get marker whose name is _name
   Marker* getMarker(const std::string& _name);
 
   /// Get const marker whose name is _name
   const Marker* getMarker(const std::string& _name) const;
+
+  DART_BAKE_SPECIALIZED_NODE_SKEL_DECLARATIONS( ShapeNode )
+
+  DART_BAKE_SPECIALIZED_NODE_SKEL_DECLARATIONS( EndEffector )
 
   /// \}
 
@@ -514,8 +651,9 @@ public:
   // Impulse-based dynamics algorithms
   //----------------------------------------------------------------------------
 
-  /// Clear constraint impulses: (a) spatial constraints on BodyNode and
-  /// (b) generalized constraints on Joint
+  /// Clear constraint impulses and cache data used for impulse-based forward
+  /// dynamics algorithm, where the constraint impulses are spatial constraints
+  /// on the BodyNodes and generalized constraints on the Joints.
   void clearConstraintImpulses();
 
   /// Update bias impulses
@@ -645,7 +783,7 @@ public:
   // Documentation inherited
   math::LinearJacobian getLinearJacobianDeriv(
       const JacobianNode* _node,
-      const Eigen::Vector3d& _localOffset = Eigen::Vector3d::Zero(),
+      const Eigen::Vector3d& _localOffset,
       const Frame* _inCoordinatesOf = Frame::World()) const override;
 
   // Documentation inherited
@@ -805,20 +943,6 @@ public:
   /// \}
 
   //----------------------------------------------------------------------------
-  // Rendering
-  //----------------------------------------------------------------------------
-
-  /// Draw this skeleton
-  void draw(renderer::RenderInterface* _ri = nullptr,
-            const Eigen::Vector4d& _color = Eigen::Vector4d::Ones(),
-            bool _useDefaultColor = true) const;
-
-  /// Draw markers in this skeleton
-  void drawMarkers(renderer::RenderInterface* _ri = nullptr,
-                   const Eigen::Vector4d& _color = Eigen::Vector4d::Ones(),
-                   bool _useDefaultColor = true) const;
-
-  //----------------------------------------------------------------------------
   // Friendship
   //----------------------------------------------------------------------------
   friend class BodyNode;
@@ -827,10 +951,12 @@ public:
   friend class SingleDofJoint;
   template<size_t> friend class MultiDofJoint;
   friend class DegreeOfFreedom;
+  friend class Node;
+  friend class ShapeNode;
   friend class EndEffector;
 
 protected:
-  class DataCache;
+  struct DataCache;
 
   /// Constructor called by create()
   Skeleton(const Properties& _properties);
@@ -838,14 +964,23 @@ protected:
   /// Setup this Skeleton with its shared_ptr
   void setPtr(const SkeletonPtr& _ptr);
 
+  /// Construct a new tree in the Skeleton
+  void constructNewTree();
+
   /// Register a BodyNode with the Skeleton. Internal use only.
   void registerBodyNode(BodyNode* _newBodyNode);
 
   /// Register a Joint with the Skeleton. Internal use only.
   void registerJoint(Joint* _newJoint);
 
-  /// Register an EndEffector with the Skeleton. Internal use only.
-  void registerEndEffector(EndEffector* _newEndEffector);
+  /// Register a Node with the Skeleton. Internal use only.
+  void registerNode(NodeMap& nodeMap, Node* _newNode, size_t& _index);
+
+  /// Register a Node with the Skeleton. Internal use only.
+  void registerNode(Node* _newNode);
+
+  /// Remove an old tree from the Skeleton
+  void destructOldTree(size_t tree);
 
   /// Remove a BodyNode from the Skeleton. Internal use only.
   void unregisterBodyNode(BodyNode* _oldBodyNode);
@@ -853,8 +988,11 @@ protected:
   /// Remove a Joint from the Skeleton. Internal use only.
   void unregisterJoint(Joint* _oldJoint);
 
-  /// Remove an EndEffector from the Skeleton. Internal use only.
-  void unregisterEndEffector(EndEffector* _oldEndEffector);
+  /// Remove a Node from the Skeleton. Internal use only.
+  void unregisterNode(NodeMap& nodeMap, Node* _oldNode, size_t& _index);
+
+  /// Remove a Node from the Skeleton. Internal use only.
+  void unregisterNode(Node* _oldNode);
 
   /// Move a subtree of BodyNodes from this Skeleton to another Skeleton
   bool moveBodyNodeTree(Joint* _parentJoint, BodyNode* _bodyNode,
@@ -979,9 +1117,6 @@ protected:
   /// Add a Joint to to the Joint NameManager
   const std::string& addEntryToJointNameMgr(Joint* _newJoint, bool _updateDofNames=true);
 
-  /// Add an EndEffector to the EndEffector NameManager
-  void addEntryToEndEffectorNameMgr(EndEffector* _ee);
-
   /// Add a SoftBodyNode to the SoftBodyNode NameManager
   void addEntryToSoftBodyNodeNameMgr(SoftBodyNode* _newNode);
 
@@ -1005,9 +1140,6 @@ protected:
   /// List of Soft body node list in the skeleton
   std::vector<SoftBodyNode*> mSoftBodyNodes;
 
-  /// List of EndEffectors in the Skeleton
-  std::vector<EndEffector*> mEndEffectors;
-
   /// NameManager for tracking BodyNodes
   dart::common::NameManager<BodyNode*> mNameMgrForBodyNodes;
 
@@ -1022,9 +1154,6 @@ protected:
 
   /// NameManager for tracking Markers
   dart::common::NameManager<Marker*> mNameMgrForMarkers;
-
-  /// NameManager for tracking EndEffectors
-  dart::common::NameManager<EndEffector*> mNameMgrForEndEffectors;
 
   /// WholeBodyIK module for this Skeleton
   std::shared_ptr<WholeBodyIK> mWholeBodyIK;
@@ -1141,6 +1270,10 @@ protected:
 
   mutable DataCache mSkelCache;
 
+  using SpecializedTreeNodes = std::map<std::type_index, std::vector<NodeMap::iterator>*>;
+
+  SpecializedTreeNodes mSpecializedTreeNodes;
+
   /// Total mass.
   double mTotalMass;
 
@@ -1175,9 +1308,9 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-#include "dart/dynamics/detail/Skeleton.h"
-
 }  // namespace dynamics
 }  // namespace dart
+
+#include "dart/dynamics/detail/Skeleton.h"
 
 #endif  // DART_DYNAMICS_SKELETON_H_

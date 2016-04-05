@@ -100,21 +100,16 @@ public:
   /// Get all the connections
   const Eigen::aligned_vector<Eigen::Vector2i>& getConnections() const;
 
-  // Documentation inherited
-  virtual void draw(renderer::RenderInterface* _ri,
-                    const Eigen::Vector4d& _color,
-                    bool _useDefaultColor) const override;
-
   /// The returned inertia matrix will be like a very thin cylinder. The _mass
   /// will be evenly distributed across all lines.
-  virtual Eigen::Matrix3d computeInertia(double _mass) const override;
+  virtual Eigen::Matrix3d computeInertia(double mass) const override;
 
   // TODO(MXG): Consider supporting colors-per-vertex
 
 protected:
 
   // Documentation inherited
-  void computeVolume() override;
+  void updateVolume() override;
 
   /// Line thickness for rendering
   float mThickness;

@@ -71,9 +71,13 @@ else()
   option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 endif()
 option(DART_BUILD_OSGDART "Build osgDart library" ON)
-option(DART_BUILD_EXAMPLES "Build examples" ON)
-option(DART_BUILD_TUTORIALS "Build tutorials" ON)
-option(DART_BUILD_UNITTESTS "Build unit tests" ON)
+option(DART_COVERALLS "Turn on coveralls support" OFF)
+option(DART_COVERALLS_UPLOAD "Upload the generated coveralls json" ON)
+
+if(DART_COVERALLS)
+  include(Coveralls)
+  coveralls_turn_on_coverage()
+endif()
 
 #===============================================================================
 # Build type settings
@@ -118,11 +122,7 @@ find_package(EIGEN3 3.0.5 QUIET)
 if(EIGEN3_FOUND)
   message(STATUS "Looking for EIGEN3 - ${EIGEN3_VERSION} found")
 else()
-  if(PC_EIGEN3_VERSION)
-    message(SEND_ERROR "Looking for EIGEN3 - ${EIGEN3_VERSION} found, ${PROJECT_NAME} requires 3.0.5 or greater.")
-  else()
-    message(SEND_ERROR "Looking for EIGEN3 - NOT found, please install libeigen3-dev")
-  endif()
+  message(SEND_ERROR "Looking for EIGEN3 - NOT found, please install libeigen3-dev (>= 3.0.5)")
 endif()
 
 # CCD
@@ -130,11 +130,7 @@ find_package(CCD 1.4.0 QUIET)
 if(CCD_FOUND)
   message(STATUS "Looking for CCD - ${CCD_VERSION} found")
 else()
-  if(CCD_VERSION)
-    message(SEND_ERROR "Looking for CCD - ${CCD_VERSION} found, ${PROJECT_NAME} requires 1.4.0 or greater.")
-  else()
-    message(SEND_ERROR "Looking for CCD - NOT found, please install libccd-dev")
-  endif()
+  message(SEND_ERROR "Looking for CCD - NOT found, please install libccd-dev (>= 1.4.0)")
 endif()
 
 # FCL
@@ -143,12 +139,21 @@ endif()
 find_package(FCL 0.2.9 QUIET)
 if(FCL_FOUND)
   message(STATUS "Looking for FCL - ${FCL_VERSION} found")
-else()
   if(FCL_VERSION)
-    message(SEND_ERROR "Looking for FCL - ${FCL_VERSION} found, ${PROJECT_NAME} requires 0.2.9 or greater.")
-  else()
-    message(SEND_ERROR "Looking for FCL - NOT found, please install libfcl-dev")
+    if("${FCL_VERSION}" VERSION_LESS "0.4.0")
+      message(WARNING
+        "Found FCL version ${FCL_VERSION}, which is older than 0.4.0. FCL"
+        " versions predating 0.4.0 return incorrect contacts for"
+        " primitive-primitive collsions. You should use FCLMeshCollisionDetector"
+        " instead of FCLCollisionDetector if you need accurate contacts."
+      )
+      set(DART_USE_FCLMESHCOLLISIONDETECTOR TRUE)
+    else()
+      set(DART_USE_FCLMESHCOLLISIONDETECTOR FALSE)
+    endif()
   endif()
+else()
+  message(SEND_ERROR "Looking for FCL - NOT found, please install libfcl-dev (>= 0.2.9)")
 endif()
 
 # ASSIMP
@@ -174,9 +179,11 @@ if(ASSIMP_FOUND)
   ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
 
   if(NOT ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
-    message(WARNING "Installed ASSIMP ${ASSIMP_VERSION} is missing symbols "
-            "for constructor or destructor of aiScene. DART will use own "
-            "implementation. Please use ASSIMP that fixed this issue.")
+    message(WARNING "The installed version of ASSIMP (${ASSIMP_VERSION}) is "
+                    "missing symbols for the constructor and/or destructor of "
+                    "aiScene. DART will use its own implementations of these "
+                    "functions. We recommend using a version of ASSIMP that "
+                    "does not have this issue, once one becomes available.")
   endif(NOT ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
 
   check_cxx_source_compiles(
@@ -192,20 +199,18 @@ if(ASSIMP_FOUND)
   ASSIMP_AIMATERIAL_CTOR_DTOR_DEFINED)
 
   if(NOT ASSIMP_AIMATERIAL_CTOR_DTOR_DEFINED)
-    message(WARNING "Installed ASSIMP ${ASSIMP_VERSION} is missing symbols "
-            "for constructor or destructor of aiMaterial. DART will use own "
-            "implementation. Please use ASSIMP that fixed this issue.")
+    message(WARNING "The installed version of ASSIMP (${ASSIMP_VERSION}) is "
+                    "missing symbols for the constructor and/or destructor of "
+                    "aiMaterial. DART will use its own implementations of "
+                    "these functions. We recommend using a version of ASSIMP "
+                    "that does not have this issue, once one becomes available.")
   endif(NOT ASSIMP_AIMATERIAL_CTOR_DTOR_DEFINED)
 
   unset(CMAKE_REQUIRED_INCLUDES)
   unset(CMAKE_REQUIRED_LIBRARIES)
 
 else()
-  if(ASSIMP_VERSION)
-    message(SEND_ERROR "Looking for ASSIMP - ${ASSIMP_VERSION} found, ${PROJECT_NAME} requires 3.0.0 or greater.")
-  else()
-    message(SEND_ERROR "Looking for ASSIMP - NOT found, please install libassimp-dev")
-  endif()
+  message(SEND_ERROR "Looking for ASSIMP - NOT found, please install libassimp-dev (>= 3.0.0)")
 endif()
 
 # OpenGL
@@ -252,11 +257,7 @@ if(NOT BUILD_CORE_ONLY)
   if(FLANN_FOUND)
     message(STATUS "Looking for FLANN - ${FLANN_VERSION} found")
   else()
-    if(FLANN_VERSION)
-      message(SEND_ERROR "Looking for FLANN - ${FLANN_VERSION} found, ${PROJECT_NAME} requires 1.8.4 or greater.")
-    else()
-      message(SEND_ERROR "Looking for FLANN - NOT found, please install libflann-dev")
-    endif()
+    message(SEND_ERROR "Looking for FLANN - NOT found, please install libflann-dev (>= 1.8.4)")
   endif()
 
   # TINYXML
@@ -264,11 +265,7 @@ if(NOT BUILD_CORE_ONLY)
   if(TINYXML_FOUND)
     message(STATUS "Looking for TINYXML - ${TINYXML_VERSION} found")
   else()
-    if(TINYXML_VERSION)
-      message(SEND_ERROR "Looking for TINYXML - ${TINYXML_VERSION} found, ${PROJECT_NAME} requires 2.6.2 or greater.")
-    else()
-      message(SEND_ERROR "Looking for TINYXML - NOT found, please install libtinyxml-dev")
-    endif()
+    message(SEND_ERROR "Looking for TINYXML - NOT found, please install libtinyxml-dev (>= 2.6.2)")
   endif()
 
   # TINYXML2
@@ -276,11 +273,7 @@ if(NOT BUILD_CORE_ONLY)
   if(TINYXML2_FOUND)
     message(STATUS "Looking for TINYXML2 - ${TINYXML2_VERSION} found")
   else()
-    if(TINYXML2_VERSION)
-      message(SEND_ERROR "Looking for TINYXML2 - ${TINYXML2_VERSION} found, ${PROJECT_NAME} requires 1.0.1 or greater.")
-    else()
-      message(SEND_ERROR "Looking for TINYXML2 - NOT found, please install libtinyxml2-dev")
-    endif()
+    message(SEND_ERROR "Looking for TINYXML2 - NOT found, please install libtinyxml2-dev (>= 1.0.1)")
   endif()
 
   # urdfdom
@@ -323,11 +316,7 @@ if(NLOPT_FOUND)
   message(STATUS "Looking for NLOPT - ${NLOPT_VERSION} found")
   set(HAVE_NLOPT TRUE)
 else()
-  if(NLOPT_VERSION)
-    message(STATUS "Looking for NLOPT - ${NLOPT_VERSION} found, ${PROJECT_NAME} requires 2.4.1 or greater.")
-  else()
-    message(STATUS "Looking for NLOPT - NOT found, please install libnlopt-dev")
-  endif()
+  message(STATUS "Looking for NLOPT - NOT found, please install libnlopt-dev (>= 2.4.1)")
   set(HAVE_NLOPT FALSE)
 endif()
 
@@ -337,11 +326,7 @@ if(IPOPT_FOUND)
   message(STATUS "Looking for IPOPT - ${IPOPT_VERSION} found")
   set(HAVE_IPOPT TRUE)
 else()
-  if(IPOPT_VERSION)
-    message(STATUS "Looking for IPOPT - ${IPOPT_VERSION} found, ${PROJECT_NAME} requires 3.11.4 or greater.")
-  else()
-    message(STATUS "Looking for IPOPT - NOT found, please install coinor-libipopt-dev")
-  endif()
+  message(STATUS "Looking for IPOPT - NOT found, please install coinor-libipopt-dev (>= 3.11.4)")
   set(HAVE_IPOPT FALSE)
 endif()
 
@@ -356,14 +341,8 @@ else()
 endif()
 
 # BulletCollision
-if(UNIX)
-  pkg_check_modules(BULLET bullet>=2.82 QUIET)
-  if(NOT BULLET_FOUND)
-     pkg_check_modules(BULLET bullet2.82>=2.82 QUIET)
-  endif()
-else()
-  find_package(Bullet COMPONENTS BulletMath BulletCollision QUIET)
-endif()
+find_package(Bullet COMPONENTS BulletMath BulletCollision QUIET)
+
 if(BULLET_FOUND)
   message(STATUS "Looking for BulletCollision - ${BULLET_VERSION} found")
   set(HAVE_BULLET_COLLISION TRUE)
@@ -471,7 +450,7 @@ endif()
 #===============================================================================
 if(MSVC)
   # Visual Studio enables c++11 support by default
-  if(MSVC_VERSION VERSION_LESS 1800)
+  if(MSVC_VERSION VERSION_LESS 1900)
     message(FATAL_ERROR "${PROJECT_NAME} requires VS 2015 or greater.")
   endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP4")
@@ -481,7 +460,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${DART_RUNTIME_LIBRARY} /Zi /GL /Gy /W1 /EHsc /arch:SSE2")
   endif(NOT DART_MSVC_DEFAULT_OPTIONS)
 elseif(CMAKE_COMPILER_IS_GNUCXX)
-  set(CMAKE_CXX_FLAGS "-Wall -msse2 -fPIC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -msse2 -fPIC")
   execute_process(
     COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
   set(CXX_COMPILER_VERSION ${GCC_VERSION})
@@ -495,7 +474,7 @@ elseif(CMAKE_COMPILER_IS_GNUCXX)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_DEBUG}")
   set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_DEBUG} -pg")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set(CMAKE_CXX_FLAGS "-msse2 -fPIC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -fPIC")
   execute_process(
     COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE CLANG_VERSION)
   set(CXX_COMPILER_VERSION ${CLANG_VERSION})
@@ -528,9 +507,6 @@ message(STATUS "BUILD_SHARED_LIBS: ${BUILD_SHARED_LIBS}")
 message(STATUS "ENABLE_OPENMP    : ${ENABLE_OPENMP}")
 message(STATUS "Build core only  : ${BUILD_CORE_ONLY}")
 message(STATUS "Build osgDart    : ${DART_BUILD_OSGDART}")
-message(STATUS "Build examples   : ${DART_BUILD_EXAMPLES}")
-message(STATUS "Build tutorials  : ${DART_BUILD_TUTORIALS}")
-message(STATUS "Build unit tests : ${DART_BUILD_UNITTESTS}")
 message(STATUS "Install path     : ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "CXX_FLAGS        : ${CMAKE_CXX_FLAGS}")
 if(${CMAKE_BUILD_TYPE_UPPERCASE} STREQUAL "RELEASE")
@@ -589,32 +565,73 @@ install(FILES ${PC_CONFIG_OUT} DESTINATION lib/pkgconfig)
 install(FILES package.xml DESTINATION share/${PROJECT_NAME})
 
 #===============================================================================
+# Helper Functions
+#===============================================================================
+
+set_property(GLOBAL PROPERTY DART_EXAMPLES)
+set_property(GLOBAL PROPERTY DART_TUTORIALS)
+set_property(GLOBAL PROPERTY DART_UNITTESTS)
+
+function(dart_add_example target_name)
+  set_property(GLOBAL APPEND PROPERTY DART_EXAMPLES "${target_name}")
+endfunction(dart_add_example)
+
+function(dart_add_tutorial target_name)
+  set_property(GLOBAL APPEND PROPERTY DART_TUTORIALS "${target_name}")
+endfunction(dart_add_tutorial)
+
+function(dart_add_unittest target_name)
+  set_property(GLOBAL APPEND PROPERTY DART_UNITTESTS "${target_name}")
+endfunction(dart_add_unittest)
+
+#===============================================================================
 # Add sub-directories
 #===============================================================================
+
 add_subdirectory(dart)
 
 if(NOT BUILD_CORE_ONLY)
-
   if(DART_BUILD_OSGDART)
     add_subdirectory(osgDart)
   endif(DART_BUILD_OSGDART)
 
-  # Unit tests
-  if(DART_BUILD_UNITTESTS)
-    enable_testing()
-    add_subdirectory(unittests)
-  endif(DART_BUILD_UNITTESTS)
+  add_subdirectory(apps EXCLUDE_FROM_ALL)
+  add_subdirectory(tutorials EXCLUDE_FROM_ALL)
 
-  # Examples
-  if(DART_BUILD_EXAMPLES)
-    add_subdirectory(apps)
-  endif(DART_BUILD_EXAMPLES)
+  # Add a "tutorials" target to build tutorials.
+  get_property(tutorials GLOBAL PROPERTY DART_TUTORIALS)
+  add_custom_target(tutorials DEPENDS ${tutorials})
 
-  if(DART_BUILD_TUTORIALS)
-    add_subdirectory(tutorials)
-  endif()
+  message(STATUS "")
+  message(STATUS "[ Tutorials ]")
+  foreach(tutorial ${tutorials})
+    message(STATUS "Adding tutorial: ${tutorial}")
+  endforeach(tutorial ${tutorials})
 
+  # Add an "examples" target to build examples.
+  get_property(examples GLOBAL PROPERTY DART_EXAMPLES)
+  add_custom_target(examples DEPENDS ${examples})
+
+  message(STATUS "")
+  message(STATUS "[ Examples ]")
+
+  foreach(example ${examples})
+    message(STATUS "Adding example: ${example}")
+  endforeach(example ${examples})
 endif(NOT BUILD_CORE_ONLY)
+
+# Add a "tests" target to build unit tests.
+enable_testing()
+add_subdirectory(unittests EXCLUDE_FROM_ALL)
+
+get_property(unittests GLOBAL PROPERTY DART_UNITTESTS)
+add_custom_target(tests DEPENDS ${unittests})
+
+message(STATUS "")
+message(STATUS "[ Unit Tests ]")
+foreach(unittest ${unittests})
+  message(STATUS "Adding test: ${unittest}")
+endforeach(unittest ${unittests})
 
 #===============================================================================
 # Export targets

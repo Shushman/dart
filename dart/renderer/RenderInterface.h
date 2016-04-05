@@ -38,8 +38,6 @@
 #define DART_RENDERER_RENDERINTERFACE_H
 
 #include <vector>
-#include "Light.h"
-#include "Camera.h"
 #include <assimp/scene.h>
 #include <Eigen/Dense>
 
@@ -83,12 +81,6 @@ public:
 
     virtual void clear(const Eigen::Vector3d& _color);
 
-    virtual void setDefaultLight();
-    virtual void addLight(Light* _light);
-    virtual void eraseAllLights();
-    virtual void turnLightsOff();
-    virtual void turnLightsOn();
-
     virtual void setMaterial(const Eigen::Vector3d& _diffuse, const Eigen::Vector3d& _specular, double _cosinePow);
     virtual void getMaterial(Eigen::Vector3d& _diffuse, Eigen::Vector3d& _specular, double& _cosinePow) const;
     virtual void setDefaultMaterial();
@@ -107,6 +99,7 @@ public:
     virtual void drawCube(const Eigen::Vector3d& _size);
     virtual void drawCylinder(double _radius, double _height);
     virtual void drawMesh(const Eigen::Vector3d& _scale, const aiScene* _mesh);
+    virtual void drawSoftMesh(const aiMesh* mesh);
     virtual void drawList(unsigned int index);
     virtual void drawLineSegments(const std::vector<Eigen::Vector3d>& _vertices,
                                   const Eigen::aligned_vector<Eigen::Vector2i>& _connections);
@@ -120,12 +113,6 @@ public:
 
     virtual void saveToImage(const char* _filename, DecoBufferType _buffType = BT_Back);
     virtual void readFrameBuffer(DecoBufferType _buffType, DecoColorChannel _ch, void* _pixels);
-
-    virtual Camera* getCamera();
-
-protected:
-    Camera* mCamera;
-    std::vector<Light*> mLightList;
 };
 
 } // namespace renderer

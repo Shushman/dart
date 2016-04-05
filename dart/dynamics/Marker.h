@@ -38,23 +38,20 @@
 #define DART_DYNAMICS_MARKER_H_
 
 #include <string>
-
 #include <Eigen/Dense>
-
-namespace dart {
-namespace renderer {
-class RenderInterface;
-}  // namespace renderer
-}  // namespace dart
+#include "dart/math/Helpers.h"
 
 namespace dart {
 namespace dynamics {
 
 class BodyNode;
 
-class Marker {
+class Marker
+{
 public:
-  enum ConstraintType {
+
+  enum ConstraintType
+  {
     NO,
     HARD,
     SOFT
@@ -64,24 +61,27 @@ public:
   {
     std::string mName;
     Eigen::Vector3d mOffset;
+    Eigen::Vector4d mColor;
     ConstraintType mType;
 
-    Properties(const std::string& _name = "",
-               const Eigen::Vector3d& _offset = Eigen::Vector3d::Zero(),
-               ConstraintType _type = NO);
+    Properties(const std::string& name = "",
+               const Eigen::Vector3d& offset = Eigen::Vector3d::Zero(),
+               const Eigen::Vector4d& color = Color::White(1.0),
+               ConstraintType type = NO);
+
+    // To get byte-aligned Eigen vectors
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 
-  /// \brief
-  Marker(const std::string& _name, const Eigen::Vector3d& _offset,
-         BodyNode* _bodyNode, ConstraintType _type = NO);
+  /// Constructor
+  Marker(const std::string& name,
+         const Eigen::Vector3d& offset,
+         const Eigen::Vector4d& color,
+         BodyNode* bodyNode,
+         ConstraintType type = NO);
 
-  /// \brief
+  /// Destructor
   virtual ~Marker();
-
-  /// \brief
-  void draw(renderer::RenderInterface* _ri = nullptr, bool _offset = true,
-            const Eigen::Vector4d& _color = Eigen::Vector4d::Identity(),
-            bool _useDefaultColor = true) const;
 
   /// Get the BodyNode this Marker belongs to
   BodyNode* getBodyNode();
@@ -89,36 +89,44 @@ public:
   /// Get the (const) BodyNode this Marker belongs to
   const BodyNode* getBodyNode() const;
 
-  /// \brief
+  /// Get position of this marker in the parent body node coordinates
   const Eigen::Vector3d& getLocalPosition() const;
 
-  /// \brief
-  void setLocalPosition(const Eigen::Vector3d& _offset);
+  /// Set position of this marker in the parent body node coordinates
+  void setLocalPosition(const Eigen::Vector3d& offset);
 
-  /// \brief Get position w.r.t. world frame
+  /// Get position in the world coordinates
   Eigen::Vector3d getWorldPosition() const;
 
-  /// \brief
+  /// Deprecated; please use setIndexInSkeleton() instead
+  DEPRECATED(6.0)
+  void setSkeletonIndex(int index);
+
+  /// Set index in skeleton this marker is belongs to
+  void setIndexInSkeleton(int index);
+  // TODO(JS): This function is not called by any. Remove?
+
+  /// Get index in skeleton this marker is belongs to
   int getIndexInSkeleton() const;
+  // TODO(JS): This function is not called by any. Remove?
 
-  /// \brief
-  void setSkeletonIndex(int _idx);
-
-  /// \brief
+  /// Get global unique ID
   int getID() const;
 
-  /// \brief
-  void setName(const std::string&);
+  /// Set name of this marker
+  void setName(const std::string& name);
 
-  /// \brief
+  /// Get name of this marker
   const std::string& getName() const;
 
-  // useful for IK
-  /// \brief
+  /// Set constraint type. which will be useful for inverse kinematics
+  void setConstraintType(ConstraintType type);
+
+  /// Get constraint type. which will be useful for inverse kinematics
   ConstraintType getConstraintType() const;
 
-  /// \brief
-  void setConstraintType(ConstraintType _type);
+  /// Return color of this Marker
+  const Eigen::Vector4d& getColor() const;
 
   friend class Skeleton;
   friend class BodyNode;
@@ -126,7 +134,7 @@ public:
 protected:
 
   /// Constructor used by BodyNode
-  Marker(const Properties& _properties, BodyNode* _parent);
+  Marker(const Properties& properties, BodyNode* parent);
 
   /// \brief Properties of this Marker
   Properties mProperties;
@@ -138,16 +146,19 @@ protected:
   int mSkelIndex;
 
 private:
-  /// \brief a unique ID of this marker globally.
+  /// Unique ID of this marker globally.
   int mID;
 
-  /// \brief counts the number of markers globally.
+  /// Counts the number of markers globally.
   static int msMarkerCount;
 
 public:
   // To get byte-aligned Eigen vectors
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 };
+// TODO: Marker class should be refactored into a Node once pull request #531 is
+// finished.
 
 }  // namespace dynamics
 }  // namespace dart

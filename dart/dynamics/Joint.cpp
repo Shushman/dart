@@ -41,7 +41,6 @@
 
 #include "dart/common/Console.h"
 #include "dart/math/Helpers.h"
-#include "dart/renderer/RenderInterface.h"
 #include "dart/dynamics/BodyNode.h"
 #include "dart/dynamics/DegreeOfFreedom.h"
 #include "dart/dynamics/Skeleton.h"
@@ -63,6 +62,26 @@ Joint::Properties::Properties(const std::string& _name,
     mT_ChildBodyToJoint(_T_ChildBodyToJoint),
     mIsPositionLimited(_isPositionLimited),
     mActuatorType(_actuatorType)
+{
+  // Do nothing
+}
+
+//==============================================================================
+Joint::ExtendedProperties::ExtendedProperties(
+    const Properties& standardProperties,
+    const AddonProperties& addonProperties)
+  : Properties(standardProperties),
+    mAddonProperties(addonProperties)
+{
+  // Do nothing
+}
+
+//==============================================================================
+Joint::ExtendedProperties::ExtendedProperties(
+    Properties&& standardProperties,
+    AddonProperties&& addonProperties)
+  : Properties(std::move(standardProperties)),
+    mAddonProperties(std::move(addonProperties))
 {
   // Do nothing
 }
@@ -148,6 +167,24 @@ const std::string& Joint::setName(const std::string& _name, bool _renameDofs)
 const std::string& Joint::getName() const
 {
   return mJointP.mName;
+}
+
+//==============================================================================
+size_t Joint::incrementVersion()
+{
+  if(const auto& skel = getSkeleton())
+    return skel->incrementVersion();
+
+  return 0;
+}
+
+//==============================================================================
+size_t Joint::getVersion() const
+{
+  if(const auto& skel = getSkeleton())
+    return skel->getVersion();
+
+  return 0;
 }
 
 //==============================================================================
@@ -395,12 +432,6 @@ const Eigen::Isometry3d& Joint::getTransformFromParentBodyNode() const
 const Eigen::Isometry3d& Joint::getTransformFromChildBodyNode() const
 {
   return mJointP.mT_ChildBodyToJoint;
-}
-
-//==============================================================================
-void Joint::applyGLTransform(renderer::RenderInterface* _ri)
-{
-  _ri->transform(getLocalTransform());
 }
 
 //==============================================================================

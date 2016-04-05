@@ -157,8 +157,8 @@ public:
   {
     setWorld(world);
     
-    mController = std::unique_ptr<Controller>
-        (new Controller(mWorld->getSkeleton("biped")));
+    mController = dart::common::make_unique<Controller>(
+        mWorld->getSkeleton("biped"));
   }
   
   /// Handle keyboard input
@@ -202,8 +202,8 @@ public:
     if(mForceCountDown > 0)
     {
       BodyNode* bn = mWorld->getSkeleton("biped")->getBodyNode("h_abdomen");
-      const ShapePtr& shape = bn->getVisualizationShape(0);
-      shape->setColor(dart::Color::Red());
+      auto shapeNodes = bn->getShapeNodesWith<VisualAddon>();
+      shapeNodes[0]->getVisualAddon()->setColor(dart::Color::Red());
       
       if(mPositiveSign)
         bn->addExtForce(default_force * Eigen::Vector3d::UnitX(),
@@ -245,13 +245,13 @@ SkeletonPtr loadBiped()
 }
 
 // Load a skateboard model and connect it to the biped model via an Euler joint
-void modifyBipedWithSkateboard(SkeletonPtr biped)
+void modifyBipedWithSkateboard(SkeletonPtr /*biped*/)
 {
   // Lesson 5
 }
 
 // Set the actuator type for four wheel joints to "VELOCITY"
-void setVelocityAccuators(SkeletonPtr biped)
+void setVelocityAccuators(SkeletonPtr /*biped*/)
 {
   // Lesson 6
 }
@@ -277,10 +277,9 @@ SkeletonPtr createFloor()
   double floor_height = 0.01;
   std::shared_ptr<BoxShape> box(
       new BoxShape(Eigen::Vector3d(floor_width, floor_height, floor_width)));
-  box->setColor(dart::Color::Black());
-  
-  body->addVisualizationShape(box);
-  body->addCollisionShape(box);
+  auto shapeNode
+      = body->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
+  shapeNode->getVisualAddon()->setColor(dart::Color::Black());
   
   // Put the body into position
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
@@ -310,9 +309,9 @@ int main(int argc, char* argv[])
   WorldPtr world = std::make_shared<World>();
   world->setGravity(Eigen::Vector3d(0.0, -9.81, 0.0));
 
-#ifdef HAVE_BULLET_COLLISION
+#if HAVE_BULLET_COLLISION
   world->getConstraintSolver()->setCollisionDetector(
-          new dart::collision::BulletCollisionDetector());
+      dart::common::make_unique<dart::collision::BulletCollisionDetector>());
 #endif
   
   world->addSkeleton(floor);

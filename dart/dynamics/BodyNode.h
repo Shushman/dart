@@ -40,7 +40,6 @@
 
 #include <string>
 #include <vector>
-#include <unordered_map>
 
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
@@ -50,21 +49,11 @@
 #include "dart/math/Geometry.h"
 #include "dart/dynamics/Node.h"
 #include "dart/dynamics/Frame.h"
-#include "dart/dynamics/Inertia.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/Marker.h"
 #include "dart/dynamics/SmartPointer.h"
 #include "dart/dynamics/TemplatedJacobianNode.h"
-#include "dart/dynamics/EndEffector.h"
-
-const double DART_DEFAULT_FRICTION_COEFF = 1.0;
-const double DART_DEFAULT_RESTITUTION_COEFF = 0.0;
-
-namespace dart {
-namespace renderer {
-class RenderInterface;
-}  // namespace renderer
-}  // namespace dart
+#include "dart/dynamics/SpecializedNodeManager.h"
+#include "dart/dynamics/detail/BodyNodeProperties.h"
+#include "dart/dynamics/Skeleton.h"
 
 namespace dart {
 namespace dynamics {
@@ -74,6 +63,7 @@ class Skeleton;
 class Joint;
 class DegreeOfFreedom;
 class Shape;
+class EndEffector;
 class Marker;
 
 /// BodyNode class represents a single node of the skeleton.
@@ -84,6 +74,8 @@ class Marker;
 /// BodyNode inherits Frame, and a parent Frame of a BodyNode is the parent
 /// BodyNode of the BodyNode.
 class BodyNode :
+    public virtual common::AddonManager,
+    public virtual BodyNodeSpecializedFor<ShapeNode, EndEffector>,
     public SkeletonRefCountingBase,
     public TemplatedJacobianNode<BodyNode>
 {
@@ -97,68 +89,44 @@ public:
   using StructuralChangeSignal
       = common::Signal<void(const BodyNode*)>;
 
-  struct UniqueProperties
-  {
-    /// Inertia information for the BodyNode
-    Inertia mInertia;
+  using NodePropertiesVector = common::ExtensibleVector< std::unique_ptr<Node::Properties> >;
+  using NodePropertiesMap = std::map< std::type_index, std::unique_ptr<NodePropertiesVector> >;
+  using NodeProperties = common::ExtensibleMapHolder<NodePropertiesMap>;
+  using AddonProperties = common::AddonManager::Properties;
 
-    /// Array of collision shapes
-    std::vector<ShapePtr> mColShapes;
-
-    /// Indicates whether this node is collidable;
-    bool mIsCollidable;
-
-    /// Coefficient of friction
-    double mFrictionCoeff;
-
-    /// Coefficient of restitution
-    double mRestitutionCoeff;
-
-    /// Gravity will be applied if true
-    bool mGravityMode;
-
-    /// Properties of the Markers belonging to this BodyNode
-    std::vector<Marker::Properties> mMarkerProperties;
-
-    /// Constructor
-    UniqueProperties(
-        const Inertia& _inertia = Inertia(),
-        const std::vector<ShapePtr>& _collisionShapes = std::vector<ShapePtr>(),
-        bool _isCollidable = true,
-        double _frictionCoeff = DART_DEFAULT_FRICTION_COEFF,
-        double _restitutionCoeff = DART_DEFAULT_RESTITUTION_COEFF,
-        bool _gravityMode = true);
-
-    virtual ~UniqueProperties() = default;
-
-    // To get byte-aligned Eigen vectors
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  };
-
-  /// Composition of Entity and BodyNode properties
-  struct Properties : Entity::Properties, UniqueProperties
-  {
-    /// Composed constructor
-    Properties(
-        const Entity::Properties& _entityProperties = Entity::Properties("BodyNode"),
-        const UniqueProperties& _bodyNodeProperties = UniqueProperties());
-
-    virtual ~Properties() = default;
-  };
+  using UniqueProperties = detail::BodyNodeUniqueProperties;
+  using Properties = detail::BodyNodeProperties;
+  using ExtendedProperties = detail::BodyNodeExtendedProperties;
 
   BodyNode(const BodyNode&) = delete;
 
   /// Destructor
   virtual ~BodyNode();
 
+  /// Set the ExtendedProperties of this BodyNode
+  void setProperties(const ExtendedProperties& _properties);
+
+  /// Set the Properties of the attached Nodes
+  void setProperties(const NodeProperties& _properties);
+
+  /// Same as setAddonProperties()
+  void setProperties(const AddonProperties& _properties);
+
   /// Set the Properties of this BodyNode
   void setProperties(const Properties& _properties);
 
-  /// Set the Properties of this BodyNode
+  /// Set the UniqueProperties of this BodyNode
   void setProperties(const UniqueProperties& _properties);
 
   /// Get the Properties of this BodyNode
   Properties getBodyNodeProperties() const;
+
+  /// Get the the Properties of the Nodes attached to this BodyNode
+  NodeProperties getAttachedNodeProperties() const;
+
+  /// The the full extended Properties of this BodyNode, including the
+  /// Properties of its Addons, its attached Nodes, and the BodyNode itself.
+  ExtendedProperties getExtendedProperties() const;
 
   /// Copy the Properties of another BodyNode
   void copy(const BodyNode& _otherBodyNode);
@@ -168,6 +136,13 @@ public:
 
   /// Same as copy(const BodyNode&)
   BodyNode& operator=(const BodyNode& _otherBodyNode);
+
+  /// Give this BodyNode a copy of each Node from otherBodyNode
+  void duplicateNodes(const BodyNode* otherBodyNode);
+
+  /// Make the Nodes of this BodyNode match the Nodes of otherBodyNode. All
+  /// existing Nodes in this BodyNode will be removed.
+  void matchNodes(const BodyNode* otherBodyNode);
 
   /// Set name. If the name is already taken, this will return an altered
   /// version which will be used by the Skeleton
@@ -204,7 +179,7 @@ public:
   /// Return moment of inertia defined around the center of mass
   void getMomentOfInertia(
       double& _Ixx, double& _Iyy, double& _Izz,
-      double& _Ixy, double& _Ixz, double& _Iyz);
+      double& _Ixy, double& _Ixz, double& _Iyz) const;
 
   /// Return spatial inertia
   const Eigen::Matrix6d& getSpatialInertia() const;
@@ -276,24 +251,6 @@ public:
   //--------------------------------------------------------------------------
   // Structural Properties
   //--------------------------------------------------------------------------
-
-  /// Add a collision Shape into the BodyNode
-  void addCollisionShape(const ShapePtr& _shape);
-
-  /// Remove a collision Shape from this BodyNode
-  void removeCollisionShape(const ShapePtr& _shape);
-
-  /// Remove all collision Shapes from this BodyNode
-  void removeAllCollisionShapes();
-
-  /// Return the number of collision shapes
-  size_t getNumCollisionShapes() const;
-
-  /// Return _index-th collision shape
-  ShapePtr getCollisionShape(size_t _index);
-
-  /// Return (const) _index-th collision shape
-  ConstShapePtr getCollisionShape(size_t _index) const;
 
   /// Return the index of this BodyNode within its Skeleton
   size_t getIndexInSkeleton() const;
@@ -559,20 +516,84 @@ public:
   /// Return the (const) _index-th child Joint of this BodyNode
   const Joint* getChildJoint(size_t _index) const;
 
-  /// Return the number of EndEffectors attached to this BodyNode
-  size_t getNumEndEffectors() const;
+  /// Create some Node type and attach it to this BodyNode.
+  template <class NodeType, typename ...Args>
+  NodeType* createNode(Args&&... args);
 
-  /// Return an EndEffector attached to this BodyNode
-  EndEffector* getEndEffector(size_t _index);
+  /// Create an ShapeNode attached to this BodyNode. Pass a
+  /// ShapeNode::Properties argument into its constructor. If automaticName is
+  /// true, then the mName field of properties will be ignored, and the
+  /// ShapeNode will be automatically assigned a name:
+  /// <BodyNodeName>_ShapeNode_<#>
+  template <class ShapeNodeProperties>
+  ShapeNode* createShapeNode(ShapeNodeProperties properties,
+                             bool automaticName = true);
 
-  /// Return an EndEffector attached to this BodyNode
-  const EndEffector* getEndEffector(size_t _index) const;
+  /// Create a ShapeNode with an automatically assigned name:
+  /// <BodyNodeName>_ShapeNode_<#>.
+  ShapeNode* createShapeNode(const ShapePtr& shape);
 
-  /// Create an EndEffector attached to this BodyNode
-  EndEffector* createEndEffector(const EndEffector::Properties& _properties);
+  /// Create an ShapeNode with the specified name
+  ShapeNode* createShapeNode(
+      const ShapePtr& shape, const std::string& name);
+
+  /// Create an ShapeNode with the specified name
+  ShapeNode* createShapeNode(const ShapePtr& shape, const char* name);
+
+  /// Return the number of all the ShapeNodes in this BodyNode
+  size_t getNumShapeNodes() const;
+
+  /// Return the index-th ShapeNode
+  ShapeNode* getShapeNode(size_t index);
+
+  /// Return the index-th (const) ShapeNode
+  const ShapeNode* getShapeNode(size_t index) const;
+
+  /// Return the list of ShapeNodes
+  const std::vector<ShapeNode*> getShapeNodes();
+
+  /// Return the list of (const) ShapeNodes
+  const std::vector<const ShapeNode*> getShapeNodes() const;
+
+  /// Remove all ShapeNodes from this BodyNode
+  void removeAllShapeNodes();
+
+  /// Create a ShapeNode with the specified Addons and an automatically assigned
+  /// name: <BodyNodeName>_ShapeNode_<#>.
+  template <class... Addons>
+  ShapeNode* createShapeNodeWith(const ShapePtr& shape);
+
+  /// Create a ShapeNode with the specified name and Addons
+  template <class... Addons>
+  ShapeNode* createShapeNodeWith(const ShapePtr& shape,
+                                 const std::string& name);
+
+  /// Return the number of ShapeNodes containing given Addon in this BodyNode
+  template <class Addon>
+  size_t getNumShapeNodesWith() const;
+
+  /// Return the list of ShapeNodes containing given Addon
+  template <class Addon>
+  const std::vector<ShapeNode*> getShapeNodesWith();
+
+  /// Return the list of ShapeNodes containing given Addon
+  template <class Addon>
+  const std::vector<const ShapeNode*> getShapeNodesWith() const;
+
+  /// Remove all ShapeNodes containing given Addon from this BodyNode
+  template <class Addon>
+  void removeAllShapeNodesWith();
+
+  /// Create an EndEffector attached to this BodyNode. Pass an
+  /// EndEffector::Properties argument into this function.
+  template <class EndEffectorProperties>
+  EndEffector* createEndEffector(const EndEffectorProperties& _properties);
 
   /// Create an EndEffector with the specified name
   EndEffector* createEndEffector(const std::string& _name = "EndEffector");
+
+  /// Create an EndEffector with the specified name
+  EndEffector* createEndEffector(const char* _name);
 
   /// Add a marker into the bodynode
   void addMarker(Marker* _marker);
@@ -764,7 +785,8 @@ public:
                             bool _isImpulseLocal = false,
                             bool _isOffsetLocal = true);
 
-  /// Clear constraint impulse
+  /// Clear constraint impulses and cache data used for impulse-based forward
+  /// dynamics algorithm
   virtual void clearConstraintImpulse();
 
   /// Return constraint impulse
@@ -786,15 +808,6 @@ public:
   /// Return angular momentum.
   Eigen::Vector3d getAngularMomentum(
       const Eigen::Vector3d& _pivot = Eigen::Vector3d::Zero());
-
-  //----------------------------------------------------------------------------
-  // Rendering
-  //----------------------------------------------------------------------------
-
-  /// Render the markers
-  void drawMarkers(renderer::RenderInterface* _ri = nullptr,
-                   const Eigen::Vector4d& _color = Eigen::Vector4d::Ones(),
-                   bool _useDefaultColor = true) const;
 
   //----------------------------------------------------------------------------
   // Notifications
@@ -838,7 +851,11 @@ protected:
 
   /// Create a clone of this BodyNode. This may only be called by the Skeleton
   /// class.
-  virtual BodyNode* clone(BodyNode* _parentBodyNode, Joint* _parentJoint) const;
+  virtual BodyNode* clone(BodyNode* _parentBodyNode, Joint* _parentJoint,
+                          bool cloneNodes) const;
+
+  /// This is needed in order to inherit the Node class, but it does nothing
+  Node* cloneNode(BodyNode* bn) const override final;
 
   /// Initialize the vector members with proper sizes.
   virtual void init(const SkeletonPtr& _skeleton);
@@ -917,13 +934,13 @@ protected:
 
   /// Update the joint force for inverse dynamics.
   virtual void updateJointForceID(double _timeStep,
-                                  double _withDampingForces,
-                                  double _withSpringForces);
+                                  bool _withDampingForces,
+                                  bool _withSpringForces);
 
   /// Update the joint force for forward dynamics.
   virtual void updateJointForceFD(double _timeStep,
-                                  double _withDampingForces,
-                                  double _withSpringForces);
+                                  bool _withDampingForces,
+                                  bool _withSpringForces);
 
   /// Update the joint impulse for forward dynamics.
   virtual void updateJointImpulseFD();
@@ -1035,14 +1052,8 @@ protected:
   /// allows some performance optimizations.
   std::set<Entity*> mNonBodyNodeEntities;
 
-  /// List of EndEffectors that are attached to this BodyNode
-  std::vector<EndEffector*> mEndEffectors;
-
   /// List of markers associated
   std::vector<Marker*> mMarkers;
-
-  /// Map that retrieves the destructors for a given Node
-  std::unordered_map<const Node*, std::shared_ptr<NodeDestructor>> mNodeMap;
 
   /// A increasingly sorted list of dependent dof indices.
   std::vector<size_t> mDependentGenCoordIndices;
@@ -1184,9 +1195,9 @@ private:
 
 };
 
-#include "dart/dynamics/detail/BodyNode.h"
-
 }  // namespace dynamics
 }  // namespace dart
+
+#include "dart/dynamics/detail/BodyNode.h"
 
 #endif  // DART_DYNAMICS_BODYNODE_H_
