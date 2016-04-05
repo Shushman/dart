@@ -1,3 +1,5 @@
+
+#include "dart/utils/KinBodyParser.h"
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -33,13 +35,136 @@
 #include "dart/dynamics/Skeleton.h"
 #include "dart/dynamics/Marker.h"
 #include "dart/simulation/World.h"
-#include "dart/utils/KinBodyParser.h"
+#include "dart/utils/XmlHelpers.h"
 #include "dart/common/LocalResourceRetriever.h"
 #include "dart/common/Uri.h"
 
 namespace dart {
+
+namespace dynamics {
+class BodyNode;
+class Shape;
+class Skeleton;
+class Joint;
+class WeldJoint;
+class PrismaticJoint;
+class RevoluteJoint;
+class ScrewJoint;
+class UniversalJoint;
+class BallJoint;
+class EulerXYZJoint;
+class EulerJoint;
+class TranslationalJoint;
+class PlanarJoint;
+class FreeJoint;
+class Marker;
+} // namespace dynamics
+
+namespace simulation {
+class World;
+} // namespace simulation
+
+
 namespace utils {
 
+namespace {
+
+enum NextResult
+{
+  VALID,
+  CONTINUE,
+  BREAK,
+  CREATE_FREEJOINT_ROOT
+};
+
+using BodyPropPtr = std::shared_ptr<dynamics::BodyNode::Properties>;
+using JointPropPtr = std::shared_ptr<dynamics::Joint::Properties>;
+
+struct SkelBodyNode
+{
+  BodyPropPtr properties;
+  Eigen::Isometry3d initTransform;
+  std::string type;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+};
+
+struct SkelJoint
+{
+  JointPropPtr properties;
+  Eigen::VectorXd position;
+  Eigen::VectorXd velocity;
+  Eigen::VectorXd acceleration;
+  Eigen::VectorXd force;
+  std::string parentName;
+  std::string childName;
+  std::string type;
+};
+
+// first: BodyNode name | second: BodyNode information
+using BodyMap = Eigen::aligned_map<std::string, SkelBodyNode>;
+
+// first: Child BodyNode name | second: Joint information
+using JointMap = std::map<std::string, SkelJoint>;
+
+// first: Order that Joint appears in file | second: Child BodyNode name
+using IndexToJoint = std::map<size_t, std::string>;
+
+// first: Child BodyNode name | second: Order that Joint appears in file
+using JointToIndex = std::map<std::string, size_t>;
+
+
+//Method defs
+dart::dynamics::SkeletonPtr readKinBody(
+  tinyxml2::XMLElement* _KinBodyElement,
+  const common::Uri& _baseUri,
+  const common::ResourceRetrieverPtr& _retriever);
+
+SkelBodyNode readBodyNode(
+  tinyxml2::XMLElement* _bodyNodeElement,
+  const Eigen::Isometry3d& _skeletonFrame,
+  const common::Uri& _baseUri,
+  const common::ResourceRetrieverPtr& _retriever);
+
+//Similar to SkelParser::readShape
+dynamics::ShapePtr readShape(
+  tinyxml2::XMLElement* vizOrColEle,
+  const std::string& fieldName, //Either Render or Data for KinBody - may need to make more general
+  const common::Uri& _baseUri,
+  const common::ResourceRetrieverPtr& _retriever);
+
+dynamics::ShapeNode* readShapeNode(
+    dynamics::BodyNode* bodyNode,
+    tinyxml2::XMLElement* shapeNodeEle,
+    const std::string& shapeNodeName,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever);
+
+void readVisualizationShapeNode(
+    dynamics::BodyNode* bodyNode,
+    tinyxml2::XMLElement* vizShapeNodeEle,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever);
+
+void readCollisionShapeNode(
+    dynamics::BodyNode* bodyNode,
+    tinyxml2::XMLElement* collShapeNodeEle,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever);
+
+
+void readAddons(
+    const dynamics::SkeletonPtr& skeleton,
+    tinyxml2::XMLElement* _KinBodyElement,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever);
+
+common::ResourceRetrieverPtr getRetriever(
+  const common::ResourceRetrieverPtr& _retriever);
+
+} //anonymous namespace
+
+
+//==============================================================================
 dynamics::SkeletonPtr KinBodyParser::readKinBodyXMLFile(
   const common::Uri& _fileUri,
   const common::ResourceRetrieverPtr& _retriever)
@@ -51,7 +176,7 @@ dynamics::SkeletonPtr KinBodyParser::readKinBodyXMLFile(
   tinyxml2::XMLDocument _kinBodyFile;
   try
   {
-    openXMLFile(_kinBodyFile, _fileUri, retriever);
+    openXMLFile(_kinBodyFile, _fileUri, _retriever);
   }
   catch(std::exception const& e)
   {
@@ -61,7 +186,7 @@ dynamics::SkeletonPtr KinBodyParser::readKinBodyXMLFile(
   }
 
   tinyxml2::XMLElement* kinBodyElement = nullptr;
-  kinBodyElement = _dartFile.FirstChildElement("KinBody");
+  kinBodyElement = _kinBodyFile.FirstChildElement("KinBody");
   if (kinBodyElement == nullptr)
   {
     dterr << "KinBody  file[" << _fileUri.toString()
@@ -75,10 +200,13 @@ dynamics::SkeletonPtr KinBodyParser::readKinBodyXMLFile(
   return newSkeleton;
 }
 
-dynamics::SkeletonPtr KinBodyParser::readKinBody(
+namespace {
+
+//==============================================================================
+dynamics::SkeletonPtr readKinBody(
   tinyxml2::XMLElement* _KinBodyElement,
   const common::Uri& _baseUri,
-  const common::ResourceRetrieverPtr& _retriever);
+  const common::ResourceRetrieverPtr& _retriever)
 {
 
   assert(_KinBodyElement != nullptr);
@@ -87,7 +215,7 @@ dynamics::SkeletonPtr KinBodyParser::readKinBody(
   Eigen::Isometry3d skeletonFrame = Eigen::Isometry3d::Identity();
 
   // Name attribute
-  std::string name = getAttribute(_KinBodyElement, "name");
+  std::string name = getAttributeString(_KinBodyElement, "name");
   newSkeleton->setName(name);
 
   //Get Body node
@@ -102,18 +230,21 @@ dynamics::SkeletonPtr KinBodyParser::readKinBody(
   }
 
   SkelBodyNode newBodyNode = readBodyNode(
-    bodyElement, skeletonFrame,_baseUri, retriever);
+    bodyElement, skeletonFrame,_baseUri, _retriever);
 
   //How to add newBodyNode to new Skeleton?
   //Also need to add some static joint I guess
   //JS HELP!
 
+  readAddons(newSkeleton, _KinBodyElement, _baseUri, _retriever);
+  newSkeleton->resetPositions();
+  newSkeleton->resetVelocities();
 
-  return newSkeleton
+  return newSkeleton;
 
 }
 
-KinBodyParser::SkelBodyNode KinBodyParser::readBodyNode(
+SkelBodyNode readBodyNode(
   tinyxml2::XMLElement* _bodyNodeElement,
   const Eigen::Isometry3d& _skeletonFrame,
   const common::Uri& _baseUri,
@@ -125,26 +256,20 @@ KinBodyParser::SkelBodyNode KinBodyParser::readBodyNode(
   Eigen::Isometry3d initTransform = Eigen::Isometry3d::Identity();
 
   // Name attribute
-  newBodyNode->mName = getAttribute(_bodyNodeElement, "name");
+  newBodyNode->mName = getAttributeString(_bodyNodeElement, "name");
 
-  //Get Geom element
-  tinyxml2::XMLElement* geomElement = nullptr;
-  geomElement = _bodyNodeElement->FirstChildElement("Geom");
-  if (geomElement == nullptr)
+  // transformation
+  if (hasElement(_bodyNodeElement, "transformation"))
   {
-    dterr << "KinBody file[" << _baseUri.toString()
-          << "] does not contain <Geom> element "
-          <<"under <Body>, under <KinBody> element.\n";
-    return nullptr;
+    Eigen::Isometry3d W =
+        getValueIsometry3d(_bodyNodeElement, "transformation");
+    initTransform = _skeletonFrame * W;
+  }
+  else
+  {
+    initTransform = _skeletonFrame;
   }
 
-  //Get collision and visualizing data with readShape
-  dynamics::ShapePtr vizShape = readShape(geomElement,"Render",_baseUri,_retriever);
-  dynamics::ShapePtr colShape = readShape(geomElement,"Data",_baseUri,_retriever);
-
-  //Add colShape and vizShape to newBodyNode
-  newBodyNode->mVizShapes.push_back(vizShape);
-  newBodyNode->mColShapes.push_back(colShape);
 
   //Get SkelBodyNode from PropPtr
   SkelBodyNode skelBodyNode;
@@ -155,8 +280,78 @@ KinBodyParser::SkelBodyNode KinBodyParser::readBodyNode(
 }
 
 
+//==============================================================================
+dynamics::ShapeNode* readShapeNode(
+    dynamics::BodyNode* bodyNode,
+    tinyxml2::XMLElement* shapeNodeEle,
+    const std::string& shapeNodeName,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever)
+{
+  assert(bodyNode);
+
+  auto shape = readShape(shapeNodeEle, shapeNodeName, baseUri, retriever);
+  auto shapeNode = bodyNode->createShapeNode(shape, shapeNodeName);
+
+  // Transformation
+  if (hasElement(shapeNodeEle, "transformation"))
+  {
+    Eigen::Isometry3d W = getValueIsometry3d(shapeNodeEle, "transformation");
+    shapeNode->setRelativeTransform(W);
+  }
+
+  return shapeNode;
+}
+
+//==============================================================================
+void readVisualizationShapeNode(
+    dynamics::BodyNode* bodyNode,
+    tinyxml2::XMLElement* vizShapeNodeEle,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever)
+{
+  dynamics::ShapeNode* newShapeNode
+      = readShapeNode(bodyNode, vizShapeNodeEle,
+                      "Render",
+                      baseUri, retriever);
+
+  auto visualAddon = newShapeNode->getVisualAddon(true);
+
+  // color
+  if (hasElement(vizShapeNodeEle, "color"))
+  {
+    Eigen::Vector3d color = getValueVector3d(vizShapeNodeEle, "color");
+    visualAddon->setColor(color);
+  }
+}
+
+//==============================================================================
+void readCollisionShapeNode(
+    dynamics::BodyNode* bodyNode,
+    tinyxml2::XMLElement* collShapeNodeEle,
+    const common::Uri& baseUri,
+    const common::ResourceRetrieverPtr& retriever)
+{
+  dynamics::ShapeNode* newShapeNode
+      = readShapeNode(bodyNode, collShapeNodeEle,
+                      "Data",
+                      baseUri, retriever);
+
+  auto collisionAddon = newShapeNode->getCollisionAddon(true);
+  newShapeNode->createDynamicsAddon();
+
+  // collidable
+  if (hasElement(collShapeNodeEle, "collidable"))
+  {
+    const bool collidable = getValueDouble(collShapeNodeEle, "collidable");
+    collisionAddon->setCollidable(collidable);
+  }
+}
+
+
+
 //Similar to SkelParser::readShape
-dynamics::ShapePtr KinBodyParser::readShape(
+dynamics::ShapePtr readShape(
   tinyxml2::XMLElement* vizOrColEle,
   const std::string& fieldName, //Either Render or Data for KinBody - may need to make more general
   const common::Uri& _baseUri,
@@ -185,12 +380,58 @@ dynamics::ShapePtr KinBodyParser::readShape(
   else
   {
     //No field
-    dterr << "[KinBodyParser::readShape] "<<fieldName<<" not present in Geom for [" 
-      << bodyName << "]\n";
+    dterr << "[KinBodyParser::readShape] "<<fieldName<<" not present in Geom ";
     assert(0);
     return nullptr;
   }
 
   return newShape;
+}
+
+void readAddons(
+    const dynamics::SkeletonPtr& skeleton,
+    tinyxml2::XMLElement* _KinBodyElement,
+    const common::Uri& _baseUri,
+    const common::ResourceRetrieverPtr& retriever)
+{
+  ElementEnumerator xmlBodies(_KinBodyElement, "Body");
+  while (xmlBodies.next())
+  {
+    auto bodyElement = xmlBodies.get();
+    auto bodyNodeName = getAttributeString(bodyElement, "name");
+    auto bodyNode = skeleton->getBodyNode(bodyNodeName);
+
+    //Get Geom element
+    tinyxml2::XMLElement* geomElement = nullptr;
+    geomElement = _KinBodyElement->FirstChildElement("Geom");
+    if (geomElement == nullptr)
+    {
+      dterr << "KinBody file[" << _baseUri.toString()
+          << "] does not contain <Geom> element "
+          <<"under <Body>, under <KinBody> element.\n";
+      assert(0);
+    }
+
+    //Assume single viz and col shape
+    readVisualizationShapeNode(bodyNode, geomElement, _baseUri, retriever);
+
+    readCollisionShapeNode(bodyNode, geomElement, _baseUri, retriever);
+  }
 
 }
+
+
+common::ResourceRetrieverPtr getRetriever(
+  const common::ResourceRetrieverPtr& _retriever)
+{
+  if(_retriever)
+    return _retriever;
+  else
+    return std::make_shared<common::LocalResourceRetriever>();
+}
+
+} //anonymous namespace
+ 
+} //namespace utils
+
+} //namespace dart
