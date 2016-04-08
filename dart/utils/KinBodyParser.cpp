@@ -114,7 +114,7 @@ using JointToIndex = std::map<std::string, size_t>;
 
 
 //Method defs
-dart::dynamics::SkeletonPtr readKinBody(
+dynamics::SkeletonPtr readKinBody(
   tinyxml2::XMLElement* _KinBodyElement,
   const common::Uri& _baseUri,
   const common::ResourceRetrieverPtr& _retriever);
@@ -234,7 +234,22 @@ dynamics::SkeletonPtr readKinBody(
 
   //How to add newBodyNode to new Skeleton?
   //Also need to add some static joint I guess
-  //JS HELP!
+  
+  //Add a free joint
+  SkelJoint rootJoint;
+  rootJoint.properties = 
+      Eigen::make_aligned_shared<dynamics::FreeJoint::Properties>(
+            dynamics::Joint::Properties("root_joint", newBodyNode.initTransform));
+  rootJoint.type = "free";
+
+  std::pair<dynamics::Joint*, dynamics::BodyNode*> jbn_pair;
+  jbn_pair =  newSkeleton->createJointAndBodyNodePair<dynamics::FreeJoint, dynamics::BodyNode>(nullptr,
+      static_cast<const dynamics::FreeJoint::Properties&>(*rootJoint.properties),
+      static_cast<const dynamics::BodyNode::Properties&>(*newBodyNode.properties));
+
+
+  assert(jbn_pair.first != nullptr && jbn_pair.second != nullptr);
+
 
   readAddons(newSkeleton, _KinBodyElement, _baseUri, _retriever);
   newSkeleton->resetPositions();
@@ -316,6 +331,7 @@ void readVisualizationShapeNode(
                       baseUri, retriever);
 
   auto visualAddon = newShapeNode->getVisualAddon(true);
+  visualAddon->setColor(Eigen::Vector3d(1,1,1));
 
   // color
   if (hasElement(vizShapeNodeEle, "color"))
@@ -403,7 +419,7 @@ void readAddons(
 
     //Get Geom element
     tinyxml2::XMLElement* geomElement = nullptr;
-    geomElement = _KinBodyElement->FirstChildElement("Geom");
+    geomElement = bodyElement->FirstChildElement("Geom");
     if (geomElement == nullptr)
     {
       dterr << "KinBody file[" << _baseUri.toString()
