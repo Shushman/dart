@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,9 +34,9 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/JacobianNode.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/InverseKinematics.h"
+#include "dart/dynamics/JacobianNode.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/InverseKinematics.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -45,7 +45,10 @@ namespace dynamics {
 // This destructor needs to be defined somewhere that the definition of
 // InverseKinematics is visible, because it's needed by the
 // std::unique_ptr<InverseKinematics> class member
-JacobianNode::~JacobianNode() = default;
+JacobianNode::~JacobianNode()
+{
+  mBodyNode->mChildJacobianNodes.erase(this);
+}
 
 //==============================================================================
 const std::shared_ptr<InverseKinematics>&
@@ -83,12 +86,6 @@ void JacobianNode::clearIK()
 }
 
 //==============================================================================
-const std::string& JacobianNode::getName() const
-{
-  return mEntityP.mName;
-}
-
-//==============================================================================
 JacobianNode::JacobianNode(BodyNode* bn)
   : Entity(Entity::ConstructAbstract),
     Frame(Frame::ConstructAbstract),
@@ -98,7 +95,8 @@ JacobianNode::JacobianNode(BodyNode* bn)
     mIsBodyJacobianSpatialDerivDirty(true),
     mIsWorldJacobianClassicDerivDirty(true)
 {
-  // Do nothing
+  if(this != bn)
+    bn->mChildJacobianNodes.insert(this);
 }
 
 //==============================================================================

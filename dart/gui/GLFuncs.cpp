@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Sumit Jain <sumit@cc.gatech.edu>
@@ -34,7 +34,7 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/gui/GLFuncs.h"
+#include "dart/gui/GLFuncs.hpp"
 
 #include <cstdio>
 #include <iostream>
@@ -42,8 +42,8 @@
 
 #include <Eigen/Eigen>
 
-#include "dart/gui/LoadGlut.h"
-#include "dart/renderer/LoadOpengl.h"
+#include "dart/gui/LoadOpengl.hpp"
+#include "dart/gui/LoadGlut.hpp"
 
 namespace dart {
 namespace gui {

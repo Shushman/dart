@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,14 +34,13 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/EulerJoint.h"
+#include "dart/dynamics/EulerJoint.hpp"
 
 #include <string>
 
-#include "dart/common/Console.h"
-#include "dart/math/Helpers.h"
-#include "dart/math/Geometry.h"
-#include "dart/dynamics/DegreeOfFreedom.h"
+#include "dart/common/Console.hpp"
+#include "dart/math/Geometry.hpp"
+#include "dart/dynamics/DegreeOfFreedom.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -63,13 +62,19 @@ void EulerJoint::setProperties(const Properties& _properties)
 //==============================================================================
 void EulerJoint::setProperties(const UniqueProperties& _properties)
 {
-  getEulerJointAddon()->setProperties(_properties);
+  setAspectProperties(_properties);
+}
+
+//==============================================================================
+void EulerJoint::setAspectProperties(const AspectProperties& properties)
+{
+  setAxisOrder(properties.mAxisOrder, false);
 }
 
 //==============================================================================
 EulerJoint::Properties EulerJoint::getEulerJointProperties() const
 {
-  return EulerJoint::Properties(getMultiDofJointProperties(), getEulerJointAddon()->getProperties());
+  return EulerJoint::Properties(getMultiDofJointProperties(), getEulerJointAspect()->getProperties());
 }
 
 //==============================================================================
@@ -111,7 +116,7 @@ const std::string& EulerJoint::getStaticType()
 }
 
 //==============================================================================
-bool EulerJoint::isCyclic(size_t _index) const
+bool EulerJoint::isCyclic(std::size_t _index) const
 {
   return !hasPositionLimit(_index);
 }
@@ -119,16 +124,19 @@ bool EulerJoint::isCyclic(size_t _index) const
 //==============================================================================
 void EulerJoint::setAxisOrder(EulerJoint::AxisOrder _order, bool _renameDofs)
 {
-  getEulerJointAddon()->setAxisOrder(_order);
+  mAspectProperties.mAxisOrder = _order;
   if (_renameDofs)
     updateDegreeOfFreedomNames();
-  // The EulerJoint::Addon will take care of notifying a position update
+
+  Joint::notifyPositionUpdate();
+  updateLocalJacobian(true);
+  Joint::incrementVersion();
 }
 
 //==============================================================================
 EulerJoint::AxisOrder EulerJoint::getAxisOrder() const
 {
-  return getEulerJointAddon()->getAxisOrder();
+  return mAspectProperties.mAxisOrder;
 }
 
 //==============================================================================
@@ -210,9 +218,9 @@ Eigen::Matrix<double, 6, 3> EulerJoint::getLocalJacobianStatic(
       J2 <<   0.0,      0.0, 1.0, 0.0, 0.0, 0.0;
 
 #ifndef NDEBUG
-      if (std::abs(getPositionsStatic()[1]) == DART_PI * 0.5)
+      if (std::abs(getPositionsStatic()[1]) == math::constantsd::pi() * 0.5)
         std::cout << "Singular configuration in ZYX-euler joint ["
-                  << mJointP.mName << "]. ("
+                  << Joint::mAspectProperties.mName << "]. ("
                   << _positions[0] << ", "
                   << _positions[1] << ", "
                   << _positions[2] << ")"
@@ -236,9 +244,9 @@ Eigen::Matrix<double, 6, 3> EulerJoint::getLocalJacobianStatic(
       J2 << 1.0,   0.0,   0.0, 0.0, 0.0, 0.0;
 
 #ifndef NDEBUG
-      if (std::abs(_positions[1]) == DART_PI * 0.5)
+      if (std::abs(_positions[1]) == math::constantsd::pi() * 0.5)
         std::cout << "Singular configuration in ZYX-euler joint ["
-                  << mJointP.mName << "]. ("
+                  << Joint::mAspectProperties.mName << "]. ("
                   << _positions[0] << ", "
                   << _positions[1] << ", "
                   << _positions[2] << ")"
@@ -254,9 +262,9 @@ Eigen::Matrix<double, 6, 3> EulerJoint::getLocalJacobianStatic(
     }
   }
 
-  J.col(0) = math::AdT(mJointP.mT_ChildBodyToJoint, J0);
-  J.col(1) = math::AdT(mJointP.mT_ChildBodyToJoint, J1);
-  J.col(2) = math::AdT(mJointP.mT_ChildBodyToJoint, J2);
+  J.col(0) = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, J0);
+  J.col(1) = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, J1);
+  J.col(2) = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, J2);
 
   assert(!math::isNan(J));
 
@@ -267,7 +275,7 @@ Eigen::Matrix<double, 6, 3> EulerJoint::getLocalJacobianStatic(
   double det = luJTJ.determinant();
   if (det < 1e-5)
   {
-    std::cout << "ill-conditioned Jacobian in joint [" << mJointP.mName << "]."
+    std::cout << "ill-conditioned Jacobian in joint [" << Joint::mAspectProperties.mName << "]."
               << " The determinant of the Jacobian is (" << det << ")."
               << std::endl;
     std::cout << "rank is (" << luJTJ.rank() << ")." << std::endl;
@@ -280,14 +288,14 @@ Eigen::Matrix<double, 6, 3> EulerJoint::getLocalJacobianStatic(
 }
 
 //==============================================================================
-EulerJoint::EulerJoint(const Properties& _properties)
-  : detail::EulerJointBase(_properties, common::NoArg)
+EulerJoint::EulerJoint(const Properties& properties)
+  : detail::EulerJointBase(properties)
 {
-  createEulerJointAddon(_properties);
-
-  // Inherited Joint Properties must be set in the final joint class or else we
-  // get pure virtual function calls
-  MultiDofJoint<3>::setProperties(_properties);
+  // Inherited Aspects must be created in the final joint class in reverse order
+  // or else we get pure virtual function calls
+  createEulerJointAspect(properties);
+  createMultiDofJointAspect(properties);
+  createJointAspect(properties);
 }
 
 //==============================================================================
@@ -313,16 +321,16 @@ void EulerJoint::updateDegreeOfFreedomNames()
       affixes.push_back("_z");
       break;
     default:
-      dterr << "Unsupported axis order in EulerJoint named '" << mJointP.mName
+      dterr << "Unsupported axis order in EulerJoint named '" << Joint::mAspectProperties.mName
             << "' (" << static_cast<int>(getAxisOrder()) << ")\n";
   }
 
   if (affixes.size() == 3)
   {
-    for (size_t i = 0; i < 3; ++i)
+    for (std::size_t i = 0; i < 3; ++i)
     {
       if(!mDofs[i]->isNamePreserved())
-        mDofs[i]->setName(mJointP.mName + affixes[i], false);
+        mDofs[i]->setName(Joint::mAspectProperties.mName + affixes[i], false);
     }
   }
 }
@@ -330,8 +338,8 @@ void EulerJoint::updateDegreeOfFreedomNames()
 //==============================================================================
 void EulerJoint::updateLocalTransform() const
 {
-  mT = mJointP.mT_ParentBodyToJoint * convertToTransform(getPositionsStatic())
-       * mJointP.mT_ChildBodyToJoint.inverse();
+  mT = Joint::mAspectProperties.mT_ParentBodyToJoint * convertToTransform(getPositionsStatic())
+       * Joint::mAspectProperties.mT_ChildBodyToJoint.inverse();
 
   assert(math::verifyTransform(mT));
 }
@@ -410,9 +418,9 @@ void EulerJoint::updateLocalJacobianTimeDeriv() const
     }
   }
 
-  mJacobianDeriv.col(0) = math::AdT(mJointP.mT_ChildBodyToJoint, dJ0);
-  mJacobianDeriv.col(1) = math::AdT(mJointP.mT_ChildBodyToJoint, dJ1);
-  mJacobianDeriv.col(2) = math::AdT(mJointP.mT_ChildBodyToJoint, dJ2);
+  mJacobianDeriv.col(0) = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, dJ0);
+  mJacobianDeriv.col(1) = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, dJ1);
+  mJacobianDeriv.col(2) = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, dJ2);
 
   assert(!math::isNan(mJacobianDeriv));
 }

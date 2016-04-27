@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -36,14 +36,14 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
-#include "TestHelpers.h"
+#include "TestHelpers.hpp"
 
-#include "dart/dynamics/SoftBodyNode.h"
-#include "dart/dynamics/RevoluteJoint.h"
-#include "dart/dynamics/PlanarJoint.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/simulation/World.h"
-#include "dart/utils/sdf/SdfParser.h"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/dynamics/RevoluteJoint.hpp"
+#include "dart/dynamics/PlanarJoint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/simulation/World.hpp"
+#include "dart/utils/sdf/SdfParser.hpp"
 
 using namespace dart;
 using namespace math;
@@ -67,12 +67,61 @@ TEST(SdfParser, SDFSingleBodyWithoutJoint)
 
   BodyNodePtr bodyNode = skel->getBodyNode(0);
   EXPECT_TRUE(bodyNode != nullptr);
-  EXPECT_EQ(bodyNode->getNumShapeNodesWith<VisualAddon>(), 1u);
-  EXPECT_EQ(bodyNode->getNumShapeNodesWith<CollisionAddon>(), 1u);
+  EXPECT_EQ(bodyNode->getNumShapeNodesWith<VisualAspect>(), 1u);
+  EXPECT_EQ(bodyNode->getNumShapeNodesWith<CollisionAspect>(), 1u);
 
   JointPtr joint = skel->getJoint(0);
   EXPECT_TRUE(joint != nullptr);
   EXPECT_EQ(joint->getType(), FreeJoint::getStaticType());
+}
+
+//==============================================================================
+TEST(SdfParser, ParsingSDFFiles)
+{
+  const auto numSteps = 10u;
+
+  // Create a list of sdf files to test with where the sdf files contains World
+  std::vector<std::string> worldFiles;
+  worldFiles.push_back(DART_DATA_PATH"sdf/benchmark.world");
+  worldFiles.push_back(DART_DATA_PATH"sdf/double_pendulum.world");
+  worldFiles.push_back(DART_DATA_PATH"sdf/double_pendulum_with_base.world");
+  worldFiles.push_back(DART_DATA_PATH"sdf/empty.world");
+  worldFiles.push_back(DART_DATA_PATH"sdf/ground.world");
+  worldFiles.push_back(DART_DATA_PATH"sdf/test/single_bodynode_skeleton.world");
+
+  std::vector<WorldPtr> worlds;
+  for (const auto& worldFile : worldFiles)
+    worlds.push_back(SdfParser::readWorld(worldFile));
+
+  for (auto world : worlds)
+  {
+    EXPECT_TRUE(nullptr != world);
+
+    for (auto i = 0u; i < numSteps; ++i)
+      world->step();
+  }
+
+  // Create another list of sdf files to test with where the sdf files contains
+  // Skeleton
+  std::vector<std::string> skeletonFiles;
+  skeletonFiles.push_back(DART_DATA_PATH"sdf/atlas/atlas_v3_no_head.sdf");
+  skeletonFiles.push_back(DART_DATA_PATH"sdf/atlas/atlas_v3_no_head_soft_feet.sdf");
+
+  auto world = std::make_shared<World>();
+  std::vector<SkeletonPtr> skeletons;
+  for (const auto& skeletonFile : skeletonFiles)
+    skeletons.push_back(SdfParser::readSkeleton(skeletonFile));
+
+  for (auto skeleton : skeletons)
+  {
+    EXPECT_TRUE(nullptr != skeleton);
+
+    world->addSkeleton(skeleton);
+    for (auto i = 0u; i < numSteps; ++i)
+      world->step();
+
+    world->removeAllSkeletons();
+  }
 }
 
 //==============================================================================

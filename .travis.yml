@@ -1,52 +1,36 @@
 language: cpp
 
-os:
-  - linux
-  - osx
-
 sudo: required
 
 dist: trusty
-
-compiler:
-  - gcc
-  - clang
-
-env:
-  - BUILD_CORE_ONLY=OFF BUILD_TYPE=Debug   COVERALLS=OFF
-  - BUILD_CORE_ONLY=OFF BUILD_TYPE=Release COVERALLS=OFF
-  - BUILD_CORE_ONLY=ON  BUILD_TYPE=Debug   COVERALLS=OFF
-  - BUILD_CORE_ONLY=ON  BUILD_TYPE=Release COVERALLS=OFF
 
 matrix:
   include:
     - os: linux
       compiler: gcc
-      env: BUILD_CORE_ONLY=OFF BUILD_TYPE=Debug COVERALLS=ON COVERALLS_REPO_TOKEN=FKh1HgwfV5uzNrYxIT6ZWjcFqybYZSUym
-  exclude:
-    - os: osx
+      env: BUILD_TYPE=Debug COVERALLS=ON COMPILER=GCC
+    - os: linux
       compiler: gcc
+      env: BUILD_TYPE=Release COVERALLS=OFF COMPILER=GCC
+    - os: linux
+      compiler: clang
+      env: BUILD_TYPE=Debug COVERALLS=OFF COMPILER=CLANG
+    - os: linux
+      compiler: clang
+      env: BUILD_TYPE=Release COVERALLS=OFF COMPILER=CLANG
+    - os: osx
+      compiler: clang
+      env: BUILD_TYPE=Debug COVERALLS=OFF COMPILER=CLANG
+    - os: osx
+      compiler: clang
+      env: BUILD_TYPE=Release COVERALLS=OFF COMPILER=CLANG
 
 install:
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then 'ci/install_linux.sh' ; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx"   ]; then 'ci/install_osx.sh'   ; fi
+  - 'ci/install.sh'
 
 script:
-<<<<<<< HEAD
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then '../ci/script_linux.sh' ; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx"   ]; then '../ci/script_osx.sh'   ; fi
-after_failure:
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then '../ci/after_failure_linux.sh' ; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx"   ]; then '../ci/after_failure_osx.sh'   ; fi
-=======
-  - mkdir build && cd build
-  - cmake -DBUILD_CORE_ONLY=$BUILD_CORE_ONLY -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DDART_COVERALLS=$COVERALLS ..
-  - make all
-  - if [ $BUILD_CORE_ONLY = OFF ]; then make tutorials examples tests test; fi
-  - if [ $COVERALLS = ON ]; then make coveralls; fi
+  - 'ci/script.sh'
 
 after_failure: 
   - cat Testing/Temporary/LastTest.log
   - cat Testing/Temporary/LastTestsFailed.log
->>>>>>> 7c04754e70ae7db33cfd8f47066b32a685e491f7
-

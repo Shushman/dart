@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -35,7 +35,9 @@
  */
 
 #include <random>
-#include "dart/dart.h"
+
+#include "dart/dart.hpp"
+#include "dart/gui/gui.hpp"
 
 const double default_shape_density = 1000; // kg/m^3
 const double default_shape_height  = 0.1;  // m
@@ -222,7 +224,7 @@ protected:
   /// it, if one existed
   void removeSkeleton(const SkeletonPtr& skel)
   {
-    for(size_t i=0; i<mJointConstraints.size(); ++i)
+    for(std::size_t i=0; i<mJointConstraints.size(); ++i)
     {
       const dart::constraint::JointConstraintPtr& constraint =
           mJointConstraints[i];
@@ -268,7 +270,7 @@ protected:
 
   /// Keep track of how many Skeletons we spawn to ensure we can give them all
   /// unique names
-  size_t mSkelCount;
+  std::size_t mSkelCount;
 
 };
 
@@ -332,12 +334,12 @@ BodyNode* addSoftBody(const SkeletonPtr& /*chain*/, const std::string& /*name*/,
 void setAllColors(const SkeletonPtr& object, const Eigen::Vector3d& color)
 {
   // Set the color of all the shapes in the object
-  for(size_t i=0; i < object->getNumBodyNodes(); ++i)
+  for(std::size_t i=0; i < object->getNumBodyNodes(); ++i)
   {
     BodyNode* bn = object->getBodyNode(i);
-    auto visualShapeNodes = bn->getShapeNodesWith<VisualAddon>();
+    auto visualShapeNodes = bn->getShapeNodesWith<VisualAspect>();
     for(auto visualShapeNode : visualShapeNodes)
-      visualShapeNode->getVisualAddon()->setColor(color);
+      visualShapeNode->getVisualAspect()->setColor(color);
   }
 }
 
@@ -424,8 +426,8 @@ SkeletonPtr createGround()
         Eigen::Vector3d(default_ground_width, default_ground_width,
                         default_wall_thickness));
   auto shapeNode
-      = bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
-  shapeNode->getVisualAddon()->setColor(Eigen::Vector3d(1.0, 1.0, 1.0));
+      = bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  shapeNode->getVisualAspect()->setColor(Eigen::Vector3d(1.0, 1.0, 1.0));
 
   return ground;
 }
@@ -440,8 +442,8 @@ SkeletonPtr createWall()
         Eigen::Vector3d(default_wall_thickness, default_ground_width,
                         default_wall_height));
   auto shapeNode
-      = bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
-  shapeNode->getVisualAddon()->setColor(Eigen::Vector3d(0.8, 0.8, 0.8));
+      = bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  shapeNode->getVisualAspect()->setColor(Eigen::Vector3d(0.8, 0.8, 0.8));
 
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
   tf.translation() = Eigen::Vector3d(

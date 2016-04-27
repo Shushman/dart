@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Sumit Jain <sumit@cc.gatech.edu>
@@ -34,9 +34,9 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/gui/Trackball.h"
+#include "dart/gui/Trackball.hpp"
 
-#include "dart/renderer/LoadOpengl.h"
+#include "dart/gui/LoadOpengl.hpp"
 
 namespace dart {
 namespace gui {

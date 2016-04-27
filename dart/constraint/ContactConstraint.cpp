@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,16 +34,18 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/constraint/ContactConstraint.h"
+#include "dart/constraint/ContactConstraint.hpp"
 
 #include <iostream>
 
-#include "dart/common/Console.h"
-#include "dart/math/Helpers.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/Skeleton.h"
+#include "dart/common/Console.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/collision/CollisionObject.hpp"
 #include "dart/lcpsolver/lcp.h"
+#include "dart/math/Helpers.hpp"
 
+#define DART_EPSILON 1e-6
 #define DART_ERROR_ALLOWANCE 0.0
 #define DART_ERP     0.01
 #define DART_MAX_ERV 1e-3
@@ -69,6 +71,8 @@ ContactConstraint::ContactConstraint(collision::Contact& _contact,
                                      double _timeStep)
   : ConstraintBase(),
     mTimeStep(_timeStep),
+    mBodyNode1(const_cast<dynamics::ShapeFrame*>(_contact.collisionObject1->getShapeFrame())->asShapeNode()->getBodyNodePtr().get()),
+    mBodyNode2(const_cast<dynamics::ShapeFrame*>(_contact.collisionObject2->getShapeFrame())->asShapeNode()->getBodyNodePtr().get()),
     mFirstFrictionalDirection(Eigen::Vector3d::UnitZ()),
     mIsFrictionOn(true),
     mAppliedImpulseIndex(-1),
@@ -77,10 +81,6 @@ ContactConstraint::ContactConstraint(collision::Contact& _contact,
 {
   // TODO(JS): Assumed single contact
   mContacts.push_back(&_contact);
-
-  // TODO(JS):
-  mBodyNode1 = _contact.bodyNode1.lock();
-  mBodyNode2 = _contact.bodyNode2.lock();
 
   //----------------------------------------------
   // Bounce
@@ -126,7 +126,7 @@ ContactConstraint::ContactConstraint(collision::Contact& _contact,
     mJacobians2.resize(mDim);
 
     // Intermediate variables
-    size_t idx = 0;
+    std::size_t idx = 0;
 
     Eigen::Vector3d bodyDirection1;
     Eigen::Vector3d bodyDirection2;
@@ -134,7 +134,7 @@ ContactConstraint::ContactConstraint(collision::Contact& _contact,
     Eigen::Vector3d bodyPoint1;
     Eigen::Vector3d bodyPoint2;
 
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       collision::Contact* ct = mContacts[i];
 
@@ -225,7 +225,7 @@ ContactConstraint::ContactConstraint(collision::Contact& _contact,
     Eigen::Vector3d bodyPoint1;
     Eigen::Vector3d bodyPoint2;
 
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       collision::Contact* ct = mContacts[i];
 
@@ -385,8 +385,8 @@ void ContactConstraint::getInformation(ConstraintInfo* _info)
   //----------------------------------------------------------------------------
   if (mIsFrictionOn)
   {
-    size_t index = 0;
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       // Bias term, w, should be zero
       assert(_info->w[index] == 0.0);
@@ -471,7 +471,7 @@ void ContactConstraint::getInformation(ConstraintInfo* _info)
   //----------------------------------------------------------------------------
   else
   {
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       // Bias term, w, should be zero
       _info->w[i] = 0.0;
@@ -532,7 +532,7 @@ void ContactConstraint::getInformation(ConstraintInfo* _info)
 }
 
 //==============================================================================
-void ContactConstraint::applyUnitImpulse(size_t _idx)
+void ContactConstraint::applyUnitImpulse(std::size_t _idx)
 {
   assert(_idx < mDim && "Invalid Index.");
   assert(isActive());
@@ -603,7 +603,7 @@ void ContactConstraint::getVelocityChange(double* _vel, bool _withCfm)
 {
   assert(_vel != nullptr && "Null pointer is not allowed.");
 
-  for (size_t i = 0; i < mDim; ++i)
+  for (std::size_t i = 0; i < mDim; ++i)
   {
     _vel[i] = 0.0;
 
@@ -657,17 +657,17 @@ void ContactConstraint::applyImpulse(double* _lambda)
   //----------------------------------------------------------------------------
   if (mIsFrictionOn)
   {
-    size_t index = 0;
+    std::size_t index = 0;
 
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
-//      std::cout << "_lambda1: " << _lambda[_idx] << std::endl;
-//      std::cout << "_lambda2: " << _lambda[_idx + 1] << std::endl;
-//      std::cout << "_lambda3: " << _lambda[_idx + 2] << std::endl;
+//      std::cout << "_lambda1: " << _lambda[index] << std::endl;
+//      std::cout << "_lambda2: " << _lambda[index + 1] << std::endl;
+//      std::cout << "_lambda3: " << _lambda[index + 2] << std::endl;
 
-//      std::cout << "imp1: " << mJacobians2[i * 3 + 0] * _lambda[_idx] << std::endl;
-//      std::cout << "imp2: " << mJacobians2[i * 3 + 1] * _lambda[_idx + 1] << std::endl;
-//      std::cout << "imp3: " << mJacobians2[i * 3 + 2] * _lambda[_idx + 2] << std::endl;
+//      std::cout << "imp1: " << mJacobians2[i * 3 + 0] * _lambda[index] << std::endl;
+//      std::cout << "imp2: " << mJacobians2[i * 3 + 1] * _lambda[index + 1] << std::endl;
+//      std::cout << "imp3: " << mJacobians2[i * 3 + 2] * _lambda[index + 2] << std::endl;
 
       assert(!math::isNan(_lambda[index]));
 
@@ -718,7 +718,7 @@ void ContactConstraint::applyImpulse(double* _lambda)
   //----------------------------------------------------------------------------
   else
   {
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       // Normal impulsive force
 //			pContactPts[i]->lambda[0] = _lambda[i];
@@ -739,7 +739,7 @@ void ContactConstraint::getRelVelocity(double* _relVel)
 {
   assert(_relVel != nullptr && "Null pointer is not allowed.");
 
-  for (size_t i = 0; i < mDim; ++i)
+  for (std::size_t i = 0; i < mDim; ++i)
   {
     _relVel[i] = 0.0;
 
@@ -749,7 +749,7 @@ void ContactConstraint::getRelVelocity(double* _relVel)
     if (mBodyNode2->isReactive())
       _relVel[i] -= mJacobians2[i].dot(mBodyNode2->getSpatialVelocity());
 
-//    std::cout << "_relVel[i + _idx]: " << _relVel[i + _idx] << std::endl;
+//    std::cout << "_relVel[i]: " << _relVel[i] << std::endl;
   }
 }
 
@@ -787,6 +787,8 @@ void ContactConstraint::updateFirstFrictionalDirection()
 Eigen::MatrixXd ContactConstraint::getTangentBasisMatrixODE(
     const Eigen::Vector3d& _n)
 {
+  using namespace math::suffixes;
+
   // TODO(JS): Use mNumFrictionConeBases
   // Check if the number of bases is even number.
 //  bool isEvenNumBases = mNumFrictionConeBases % 2 ? true : false;
@@ -810,7 +812,7 @@ Eigen::MatrixXd ContactConstraint::getTangentBasisMatrixODE(
   // Each basis and its opposite belong in the matrix, so we iterate half as
   // many times
   T.col(0) = tangent;
-  T.col(1) = Eigen::Quaterniond(Eigen::AngleAxisd(DART_PI_HALF, _n)) * tangent;
+  T.col(1) = Eigen::Quaterniond(Eigen::AngleAxisd(0.5_pi, _n)) * tangent;
   return T;
 }
 

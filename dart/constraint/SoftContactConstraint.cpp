@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,20 +34,20 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/constraint/SoftContactConstraint.h"
+#include "dart/constraint/SoftContactConstraint.hpp"
 
 #include <iostream>
 
-#include "dart/common/Console.h"
-#include "dart/math/Helpers.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/PointMass.h"
-#include "dart/dynamics/SoftBodyNode.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/Shape.h"
-#include "dart/collision/fcl_mesh/FCLMeshCollisionDetector.h"
+#include "dart/common/Console.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/PointMass.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/Shape.hpp"
+#include "dart/collision/CollisionObject.hpp"
 #include "dart/lcpsolver/lcp.h"
 
+#define DART_EPSILON 1e-6
 #define DART_ERROR_ALLOWANCE 0.0
 #define DART_ERP     0.01
 #define DART_MAX_ERV 1e+1
@@ -70,16 +70,16 @@ double SoftContactConstraint::mConstraintForceMixing     = DART_CFM;
 
 //==============================================================================
 SoftContactConstraint::SoftContactConstraint(
-    collision::Contact& _contact, double _timeStep)
+    collision::Contact& contact, double timeStep)
   : ConstraintBase(),
-    mTimeStep(_timeStep),
-    mBodyNode1(_contact.bodyNode1.lock()),
-    mBodyNode2(_contact.bodyNode2.lock()),
+    mTimeStep(timeStep),
+    mBodyNode1(const_cast<dynamics::ShapeFrame*>(contact.collisionObject1->getShapeFrame())->asShapeNode()->getBodyNodePtr().get()),
+    mBodyNode2(const_cast<dynamics::ShapeFrame*>(contact.collisionObject2->getShapeFrame())->asShapeNode()->getBodyNodePtr().get()),
     mSoftBodyNode1(dynamic_cast<dynamics::SoftBodyNode*>(mBodyNode1)),
     mSoftBodyNode2(dynamic_cast<dynamics::SoftBodyNode*>(mBodyNode2)),
     mPointMass1(nullptr),
     mPointMass2(nullptr),
-    mSoftCollInfo(static_cast<collision::SoftCollisionInfo*>(_contact.userData)),
+    mSoftCollInfo(static_cast<collision::SoftCollisionInfo*>(contact.userData)),
     mFirstFrictionalDirection(Eigen::Vector3d::UnitZ()),
     mIsFrictionOn(true),
     mAppliedImpulseIndex(-1),
@@ -87,35 +87,39 @@ SoftContactConstraint::SoftContactConstraint(
     mActive(false)
 {
   // TODO(JS): Assumed single contact
-  mContacts.push_back(&_contact);
+  mContacts.push_back(&contact);
 
   // Set the colliding state of body nodes and point masses to false
   if (mSoftBodyNode1)
   {
-    for (size_t i = 0; i < mSoftBodyNode1->getNumPointMasses(); ++i)
+    for (std::size_t i = 0; i < mSoftBodyNode1->getNumPointMasses(); ++i)
       mSoftBodyNode1->getPointMass(i)->setColliding(false);
   }
   if (mSoftBodyNode2)
   {
-    for (size_t i = 0; i < mSoftBodyNode2->getNumPointMasses(); ++i)
+    for (std::size_t i = 0; i < mSoftBodyNode2->getNumPointMasses(); ++i)
       mSoftBodyNode2->getPointMass(i)->setColliding(false);
   }
 
   // Select colling point mass based on trimesh ID
   if (mSoftBodyNode1)
   {
-    if (_contact.shape1->getShapeType() == dynamics::Shape::SOFT_MESH)
+    if (contact.collisionObject1->getShape()->getShapeType()
+        == dynamics::Shape::SOFT_MESH)
     {
-      mPointMass1 = selectCollidingPointMass(mSoftBodyNode1, _contact.point,
-                                             _contact.triID1);
+      mPointMass1 = selectCollidingPointMass(mSoftBodyNode1, contact.point,
+                                             contact.triID1);
+      mPointMass1->setColliding(true);
     }
   }
   if (mSoftBodyNode2)
   {
-    if (_contact.shape2->getShapeType() == dynamics::Shape::SOFT_MESH)
+    if (contact.collisionObject2->getShape()->getShapeType()
+        == dynamics::Shape::SOFT_MESH)
     {
-      mPointMass2 = selectCollidingPointMass(mSoftBodyNode2, _contact.point,
-                                             _contact.triID2);
+      mPointMass2 = selectCollidingPointMass(mSoftBodyNode2, contact.point,
+                                             contact.triID2);
+      mPointMass2->setColliding(true);
     }
   }
 
@@ -171,7 +175,7 @@ SoftContactConstraint::SoftContactConstraint(
     Eigen::Vector3d bodyPoint1;
     Eigen::Vector3d bodyPoint2;
 
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       collision::Contact* ct = mContacts[i];
 
@@ -262,7 +266,7 @@ SoftContactConstraint::SoftContactConstraint(
     Eigen::Vector3d bodyPoint1;
     Eigen::Vector3d bodyPoint2;
 
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       collision::Contact* ct = mContacts[i];
 
@@ -422,8 +426,8 @@ void SoftContactConstraint::getInformation(ConstraintInfo* _info)
   //----------------------------------------------------------------------------
   if (mIsFrictionOn)
   {
-    size_t index = 0;
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       // Bias term, w, should be zero
       assert(_info->w[index] == 0.0);
@@ -508,7 +512,7 @@ void SoftContactConstraint::getInformation(ConstraintInfo* _info)
   //----------------------------------------------------------------------------
   else
   {
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       // Bias term, w, should be zero
       _info->w[i] = 0.0;
@@ -571,7 +575,7 @@ void SoftContactConstraint::getInformation(ConstraintInfo* _info)
 }
 
 //==============================================================================
-void SoftContactConstraint::applyUnitImpulse(size_t _idx)
+void SoftContactConstraint::applyUnitImpulse(std::size_t _idx)
 {
   assert(_idx < mDim && "Invalid Index.");
   assert(isActive());
@@ -660,7 +664,7 @@ void SoftContactConstraint::getVelocityChange(double* _vel, bool _withCfm)
 {
   assert(_vel != nullptr && "Null pointer is not allowed.");
 
-  for (size_t i = 0; i < mDim; ++i)
+  for (std::size_t i = 0; i < mDim; ++i)
   {
     _vel[i] = 0.0;
 
@@ -732,9 +736,9 @@ void SoftContactConstraint::applyImpulse(double* _lambda)
   //----------------------------------------------------------------------------
   if (mIsFrictionOn)
   {
-    size_t index = 0;
+    std::size_t index = 0;
 
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
 //      std::cout << "_lambda1: " << _lambda[_idx] << std::endl;
 //      std::cout << "_lambda2: " << _lambda[_idx + 1] << std::endl;
@@ -844,7 +848,7 @@ void SoftContactConstraint::applyImpulse(double* _lambda)
   //----------------------------------------------------------------------------
   else
   {
-    for (size_t i = 0; i < mContacts.size(); ++i)
+    for (std::size_t i = 0; i < mContacts.size(); ++i)
     {
       // Normal impulsive force
 //			pContactPts[i]->lambda[0] = _lambda[i];
@@ -882,7 +886,7 @@ void SoftContactConstraint::getRelVelocity(double* _vel)
 {
   assert(_vel != nullptr && "Null pointer is not allowed.");
 
-  for (size_t i = 0; i < mDim; ++i)
+  for (std::size_t i = 0; i < mDim; ++i)
   {
     _vel[i] = 0.0;
 
@@ -973,6 +977,8 @@ void SoftContactConstraint::updateFirstFrictionalDirection()
 Eigen::MatrixXd SoftContactConstraint::getTangentBasisMatrixODE(
     const Eigen::Vector3d& _n)
 {
+  using namespace math::suffixes;
+
   // TODO(JS): Use mNumFrictionConeBases
   // Check if the number of bases is even number.
 //  bool isEvenNumBases = mNumFrictionConeBases % 2 ? true : false;
@@ -996,7 +1002,7 @@ Eigen::MatrixXd SoftContactConstraint::getTangentBasisMatrixODE(
   // Each basis and its opposite belong in the matrix, so we iterate half as
   // many times
   T.col(0) = tangent;
-  T.col(1) = Eigen::Quaterniond(Eigen::AngleAxisd(DART_PI_HALF, _n)) * tangent;
+  T.col(1) = Eigen::Quaterniond(Eigen::AngleAxisd(0.5_pi, _n)) * tangent;
   return T;
 }
 

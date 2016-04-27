@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -39,17 +39,15 @@
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>
-#include <boost/math/special_functions/fpclassify.hpp>
 
-#include "dart/common/Console.h"
-#include "dart/math/Helpers.h"
-#include "dart/dynamics/Joint.h"
-
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/SoftBodyNode.h"
-#include "dart/dynamics/PointMass.h"
-#include "dart/simulation/World.h"
-#include "dart/utils/SkelParser.h"
+#include "dart/common/Console.hpp"
+#include "dart/math/Constants.hpp"
+#include "dart/dynamics/Joint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/dynamics/PointMass.hpp"
+#include "dart/simulation/World.hpp"
+#include "dart/utils/SkelParser.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -62,17 +60,17 @@ bool equals(const DenseBase<MATRIX>& A, const DenseBase<MATRIX>& B,
             double tol = 1e-5)
 {
   // Get the matrix sizes and sanity check the call
-  const size_t n1 = A.cols(), m1 = A.rows();
-  const size_t n2 = B.cols(), m2 = B.rows();
+  const std::size_t n1 = A.cols(), m1 = A.rows();
+  const std::size_t n2 = B.cols(), m2 = B.rows();
   if (m1 != m2 || n1 != n2)
     return false;
 
   // Check each index
-  for (size_t i = 0; i < m1; i++)
+  for (std::size_t i = 0; i < m1; i++)
   {
-    for (size_t j = 0; j < n1; j++)
+    for (std::size_t j = 0; j < n1; j++)
     {
-      if (boost::math::isnan(A(i,j)) ^ boost::math::isnan(B(i,j)))
+      if (std::isnan(A(i,j)) ^ std::isnan(B(i,j)))
         return false;
       else if (std::abs(A(i,j) - B(i,j)) > tol)
         return false;
@@ -115,7 +113,7 @@ public:
 
 protected:
   // Sets up the test fixture.
-  virtual void SetUp();
+  void SetUp() override;
 
   // Skel file list.
   std::vector<std::string> list;
@@ -143,7 +141,7 @@ MatrixXd SoftDynamicsTest::getMassMatrix(dynamics::SkeletonPtr _skel)
   Eigen::Matrix6d I;  // Body inertia
   math::Jacobian J;  // Body Jacobian
 
-  for (size_t i = 0; i < _skel->getNumBodyNodes(); ++i)
+  for (std::size_t i = 0; i < _skel->getNumBodyNodes(); ++i)
   {
     dynamics::BodyNode* body = _skel->getBodyNode(i);
 
@@ -186,7 +184,7 @@ MatrixXd SoftDynamicsTest::getAugMassMatrix(dynamics::SkeletonPtr _skel)
   MatrixXd AugM;
 
   // Compute diagonal matrices of joint damping and joint stiffness
-  for (size_t i = 0; i < _skel->getNumBodyNodes(); ++i)
+  for (std::size_t i = 0; i < _skel->getNumBodyNodes(); ++i)
   {
     dynamics::BodyNode* body  = _skel->getBodyNode(i);
     dynamics::Joint*    joint = body->getParentJoint();
@@ -250,14 +248,14 @@ void SoftDynamicsTest::compareEquationsOfMotion(const std::string& _fileName)
   //---------------------------- Settings --------------------------------------
   // Number of random state tests for each skeletons
 #ifndef NDEBUG  // Debug mode
-  size_t nRandomItr = 1;
+  std::size_t nRandomItr = 1;
 #else
-  size_t nRandomItr = 1;
+  std::size_t nRandomItr = 1;
 #endif
 
   // Lower and upper bound of configuration for system
-  double lb = -1.5 * DART_PI;
-  double ub =  1.5 * DART_PI;
+  double lb = -1.5 * constantsd::pi();
+  double ub =  1.5 * constantsd::pi();
 
   // Lower and upper bound of joint damping and stiffness
   double lbD =  0.0;
@@ -273,7 +271,7 @@ void SoftDynamicsTest::compareEquationsOfMotion(const std::string& _fileName)
   myWorld = utils::SkelParser::readWorld(_fileName);
   EXPECT_TRUE(myWorld != nullptr);
 
-  for (size_t i = 0; i < myWorld->getNumSkeletons(); ++i)
+  for (std::size_t i = 0; i < myWorld->getNumSkeletons(); ++i)
   {
     dynamics::SkeletonPtr softSkel = myWorld->getSkeleton(i);
 
@@ -290,10 +288,10 @@ void SoftDynamicsTest::compareEquationsOfMotion(const std::string& _fileName)
       continue;
     }
 
-    for (size_t j = 0; j < nRandomItr; ++j)
+    for (std::size_t j = 0; j < nRandomItr; ++j)
     {
       // Random joint stiffness and damping coefficient
-      for (size_t k = 0; k < softSkel->getNumBodyNodes(); ++k)
+      for (std::size_t k = 0; k < softSkel->getNumBodyNodes(); ++k)
       {
         BodyNode* body     = softSkel->getBodyNode(k);
         Joint*    joint    = body->getParentJoint();
@@ -311,10 +309,13 @@ void SoftDynamicsTest::compareEquationsOfMotion(const std::string& _fileName)
       }
 
       // Set random states
-      VectorXd x = softSkel->getState();
-      for (int k = 0; k < x.size(); ++k)
-        x[k] = random(lb, ub);
-      softSkel->setState(x);
+      Skeleton::Configuration x = softSkel->getConfiguration();
+      for (std::size_t k = 0u; k < softSkel->getNumDofs(); ++k)
+      {
+        x.mPositions[k] = random(lb, ub);
+        x.mVelocities[k] = random(lb, ub);
+      }
+      softSkel->setConfiguration(x);
 
       //------------------------ Mass Matrix Test ----------------------------
       // Get matrices

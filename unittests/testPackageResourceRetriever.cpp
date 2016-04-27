@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael Koval <mkoval@cs.cmu.edu>
@@ -35,8 +35,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "dart/utils/PackageResourceRetriever.h"
-#include "TestHelpers.h"
+#include "dart/utils/PackageResourceRetriever.hpp"
+#include "TestHelpers.hpp"
 
 using dart::common::Uri;
 using dart::common::Resource;

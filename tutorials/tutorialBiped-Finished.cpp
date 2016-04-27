@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Karen Liu <karenliu@cc.gatech.edu>
@@ -34,6 +34,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "dart/dart.hpp"
+#include "dart/gui/gui.hpp"
 
 const double default_speed_increment = 0.5;
 
@@ -41,8 +43,6 @@ const int default_ik_iterations = 4500;
 
 const double default_force =  50.0; // N
 const int default_countdown = 100;  // Number of timesteps for applying force
-
-#include "dart/dart.h"
 
 using namespace dart::common;
 using namespace dart::dynamics;
@@ -66,13 +66,13 @@ public:
     mKp = Eigen::MatrixXd::Identity(nDofs, nDofs);
     mKd = Eigen::MatrixXd::Identity(nDofs, nDofs);
   
-    for(size_t i = 0; i < 6; ++i)
+    for(std::size_t i = 0; i < 6; ++i)
     {
       mKp(i, i) = 0.0;
       mKd(i, i) = 0.0;
     }
 
-    for(size_t i = 6; i < mBiped->getNumDofs(); ++i)
+    for(std::size_t i = 6; i < mBiped->getNumDofs(); ++i)
     {
       mKp(i, i) = 1000;
       mKd(i, i) = 50;
@@ -171,7 +171,7 @@ public:
   {
     int wheelFirstIndex =
         mBiped->getDof("joint_front_left_1")->getIndexInSkeleton();
-    for (size_t i = wheelFirstIndex; i < mBiped->getNumDofs(); ++i)
+    for (std::size_t i = wheelFirstIndex; i < mBiped->getNumDofs(); ++i)
     {
       mKp(i, i) = 0.0;
       mKd(i, i) = 0.0;
@@ -268,8 +268,8 @@ public:
     if(mForceCountDown > 0)
     {
       BodyNode* bn = mWorld->getSkeleton("biped")->getBodyNode("h_abdomen");
-      auto shapeNodes = bn->getShapeNodesWith<VisualAddon>();
-      shapeNodes[0]->getVisualAddon()->setColor(dart::Color::Red());
+      auto shapeNodes = bn->getShapeNodesWith<VisualAspect>();
+      shapeNodes[0]->getVisualAspect()->setColor(dart::Color::Red());
       
       if(mPositiveSign)
         bn->addExtForce(default_force * Eigen::Vector3d::UnitX(),
@@ -307,7 +307,7 @@ SkeletonPtr loadBiped()
   SkeletonPtr biped = world->getSkeleton("biped");
 
   // Set joint limits
-  for(size_t i = 0; i < biped->getNumJoints(); ++i)
+  for(std::size_t i = 0; i < biped->getNumJoints(); ++i)
     biped->getJoint(i)->setPositionLimitEnforced(true);
   
   // Enable self collision check but ignore adjacent bodies
@@ -378,7 +378,7 @@ Eigen::VectorXd solveIK(SkeletonPtr biped)
   BodyNodePtr leftToe = biped->getBodyNode("h_toe_left");
   double initialHeight = -0.8;
 
-  for(size_t i = 0; i < default_ik_iterations; ++i)
+  for(std::size_t i = 0; i < default_ik_iterations; ++i)
   {
     Eigen::Vector3d deviation = biped->getCOM() - leftHeel->getCOM();
     Eigen::Vector3d localCOM = leftHeel->getCOM(leftHeel);
@@ -437,8 +437,8 @@ SkeletonPtr createFloor()
   std::shared_ptr<BoxShape> box(
       new BoxShape(Eigen::Vector3d(floor_width, floor_height, floor_width)));
   auto shapeNode
-      = body->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
-  shapeNode->getVisualAddon()->setColor(dart::Color::Black());
+      = body->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(box);
+  shapeNode->getVisualAspect()->setColor(dart::Color::Black());
   
   // Put the body into position
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
@@ -473,7 +473,7 @@ int main(int argc, char* argv[])
 
 #if HAVE_BULLET_COLLISION
   world->getConstraintSolver()->setCollisionDetector(
-      dart::common::make_unique<dart::collision::BulletCollisionDetector>());
+      dart::collision::BulletCollisionDetector::create());
 #endif
   
   world->addSkeleton(floor);

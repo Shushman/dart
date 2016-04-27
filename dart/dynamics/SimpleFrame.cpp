@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,9 +34,9 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/common/Console.h"
-#include "dart/math/Geometry.h"
-#include "dart/dynamics/SimpleFrame.h"
+#include "dart/common/Console.hpp"
+#include "dart/math/Geometry.hpp"
+#include "dart/dynamics/SimpleFrame.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -45,37 +45,58 @@ namespace dynamics {
 SimpleFrame::SimpleFrame(Frame* _refFrame, const std::string& _name,
                          const Eigen::Isometry3d& _relativeTransform)
   : Entity(ConstructFrame),
-    Frame(_refFrame, _name),
+    Frame(_refFrame),
     Detachable(),
-    ShapeFrame(_refFrame, _name),
+    ShapeFrame(_refFrame),
     mRelativeTf(_relativeTransform),
     mRelativeVelocity(Eigen::Vector6d::Zero()),
     mRelativeAcceleration(Eigen::Vector6d::Zero()),
     mPartialAcceleration(Eigen::Vector6d::Zero())
 {
-  // Do nothing
+  setName(_name);
 }
 
 //==============================================================================
 SimpleFrame::SimpleFrame(const SimpleFrame& _otherFrame, Frame* _refFrame)
   : Entity(ConstructFrame),
-    common::AddonManager(),
-    Frame(_refFrame, ""),
+    common::Composite(),
+    Frame(_refFrame),
     Detachable(),
-    ShapeFrame(_refFrame, ""),
+    ShapeFrame(_refFrame),
     mRelativeTf(Eigen::Isometry3d::Identity()),
     mRelativeVelocity(Eigen::Vector6d::Zero()),
     mRelativeAcceleration(Eigen::Vector6d::Zero()),
     mPartialAcceleration(Eigen::Vector6d::Zero())
 {
   copy(_otherFrame, _refFrame);
-  duplicateAddons(&_otherFrame);
+  duplicateAspects(&_otherFrame);
 }
 
 //==============================================================================
 SimpleFrame::~SimpleFrame()
 {
   // Do nothing
+}
+
+//==============================================================================
+const std::string& SimpleFrame::setName(const std::string& _name)
+{
+  if(_name == mName)
+    return mName;
+
+  std::string oldName = mName;
+  mName = _name;
+
+  incrementVersion();
+  Entity::mNameChangedSignal.raise(this, oldName, mName);
+
+  return mName;
+}
+
+//==============================================================================
+const std::string& SimpleFrame::getName() const
+{
+  return mName;
 }
 
 //==============================================================================
@@ -116,7 +137,7 @@ void SimpleFrame::copy(const Frame* _otherFrame, Frame* _refFrame,
   {
     const auto shapeFrame = dynamic_cast<const ShapeFrame*>(_otherFrame);
     if(shapeFrame)
-      setProperties(shapeFrame->getShapeFrameProperties());
+      setCompositeProperties(shapeFrame->getCompositeProperties());
 
     const auto simpleFrame = dynamic_cast<const SimpleFrame*>(_otherFrame);
     if(simpleFrame)
@@ -147,11 +168,42 @@ void SimpleFrame::setRelativeTransform(
 }
 
 //==============================================================================
+void SimpleFrame::setRelativeTranslation(const Eigen::Vector3d& _newTranslation)
+{
+  mRelativeTf.translation() = _newTranslation;
+  notifyTransformUpdate();
+}
+
+//==============================================================================
+void SimpleFrame::setRelativeRotation(const Eigen::Matrix3d& _newRotation)
+{
+  mRelativeTf.linear() = _newRotation;
+  notifyTransformUpdate();
+}
+
+//==============================================================================
 void SimpleFrame::setTransform(const Eigen::Isometry3d& _newTransform,
                                const Frame* _withRespectTo)
 {
   setRelativeTransform(
         _withRespectTo->getTransform(getParentFrame()) * _newTransform);
+}
+
+//==============================================================================
+void SimpleFrame::setTranslation(const Eigen::Vector3d& _newTranslation,
+                                 const Frame* _withRespectTo)
+{
+  setRelativeTranslation(
+        _withRespectTo->getTransform(getParentFrame()) * _newTranslation);
+}
+
+//==============================================================================
+void SimpleFrame::setRotation(const Eigen::Matrix3d& _newRotation,
+                              const Frame* _withRespectTo)
+{
+  setRelativeRotation(
+        _withRespectTo->getTransform(getParentFrame()).linear()
+        * _newRotation);
 }
 
 //==============================================================================

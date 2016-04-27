@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,9 +34,9 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "DegreeOfFreedom.h"
-#include "Joint.h"
-#include "Skeleton.h"
+#include "dart/dynamics/DegreeOfFreedom.hpp"
+#include "dart/dynamics/Joint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -67,25 +67,25 @@ bool DegreeOfFreedom::isNamePreserved() const
 }
 
 //==============================================================================
-size_t DegreeOfFreedom::getIndexInSkeleton() const
+std::size_t DegreeOfFreedom::getIndexInSkeleton() const
 {
   return mIndexInSkeleton;
 }
 
 //==============================================================================
-size_t DegreeOfFreedom::getIndexInTree() const
+std::size_t DegreeOfFreedom::getIndexInTree() const
 {
   return mIndexInTree;
 }
 
 //==============================================================================
-size_t DegreeOfFreedom::getIndexInJoint() const
+std::size_t DegreeOfFreedom::getIndexInJoint() const
 {
   return mIndexInJoint;
 }
 
 //==============================================================================
-size_t DegreeOfFreedom::getTreeIndex() const
+std::size_t DegreeOfFreedom::getTreeIndex() const
 {
   return mJoint->getTreeIndex();
 }
@@ -528,7 +528,7 @@ const BodyNode* DegreeOfFreedom::getParentBodyNode() const
 
 //==============================================================================
 DegreeOfFreedom::DegreeOfFreedom(Joint* _joint,
-                                 size_t _indexInJoint)
+                                 std::size_t _indexInJoint)
   : mIndexInJoint(_indexInJoint),
     mIndexInSkeleton(0),
     mIndexInTree(0),

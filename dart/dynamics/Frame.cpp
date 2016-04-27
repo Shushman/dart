@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,10 +34,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/Frame.h"
+#include "dart/dynamics/Frame.hpp"
 
-#include "dart/common/Console.h"
-#include "dart/dynamics/Shape.h"
+#include "dart/common/Console.hpp"
+#include "dart/dynamics/Shape.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -404,7 +404,7 @@ const std::set<const Entity*> Frame::getChildEntities() const
 }
 
 //==============================================================================
-size_t Frame::getNumChildEntities() const
+std::size_t Frame::getNumChildEntities() const
 {
   return mChildEntities.size();
 }
@@ -422,7 +422,7 @@ std::set<const Frame*> Frame::getChildFrames() const
 }
 
 //==============================================================================
-size_t Frame::getNumChildFrames() const
+std::size_t Frame::getNumChildFrames() const
 {
   return mChildFrames.size();
 }
@@ -431,6 +431,18 @@ size_t Frame::getNumChildFrames() const
 bool Frame::isShapeFrame() const
 {
   return mAmShapeFrame;
+}
+
+//==============================================================================
+ShapeFrame* Frame::asShapeFrame()
+{
+  return nullptr;
+}
+
+//==============================================================================
+const ShapeFrame* Frame::asShapeFrame() const
+{
+  return nullptr;
 }
 
 //==============================================================================
@@ -495,7 +507,7 @@ void Frame::notifyAccelerationUpdate()
 }
 
 //==============================================================================
-Frame::Frame(Frame* _refFrame, const std::string& _name)
+Frame::Frame(Frame* _refFrame)
   : Entity(ConstructFrame),
     mWorldTransform(Eigen::Isometry3d::Identity()),
     mVelocity(Eigen::Vector6d::Zero()),
@@ -504,12 +516,18 @@ Frame::Frame(Frame* _refFrame, const std::string& _name)
     mAmShapeFrame(false)
 {
   mAmFrame = true;
-  mEntityP.mName = _name;
   changeParentFrame(_refFrame);
 }
 
 //==============================================================================
-Frame::Frame(ConstructAbstract_t)
+Frame::Frame()
+  : Frame(ConstructAbstract)
+{
+  // Delegated to Frame(ConstructAbstract)
+}
+
+//==============================================================================
+Frame::Frame(ConstructAbstractTag)
   : Entity(Entity::ConstructAbstract),
     mAmWorld(false),
     mAmShapeFrame(false)
@@ -574,8 +592,8 @@ void Frame::processRemovedEntity(Entity*)
 }
 
 //==============================================================================
-Frame::Frame(ConstructWorld_t)
-  : Entity(this, "World", true),
+Frame::Frame(ConstructWorldTag)
+  : Entity(this, true),
     mWorldTransform(Eigen::Isometry3d::Identity()),
     mVelocity(Eigen::Vector6d::Zero()),
     mAcceleration(Eigen::Vector6d::Zero()),
@@ -619,8 +637,24 @@ const Eigen::Vector6d& WorldFrame::getPartialAcceleration() const
 }
 
 //==============================================================================
+const std::string& WorldFrame::setName(const std::string& name)
+{
+  dterr << "[WorldFrame::setName] attempting to change name of World frame to ["
+        << name << "], but this is not allowed!\n";
+  static const std::string worldName = "World";
+  return worldName;
+}
+
+//==============================================================================
+const std::string& WorldFrame::getName() const
+{
+  static const std::string worldName = "World";
+  return worldName;
+}
+
+//==============================================================================
 WorldFrame::WorldFrame()
-  : Entity(nullptr, "World", true),
+  : Entity(nullptr, true),
     Frame(ConstructWorld),
     mRelativeTf(Eigen::Isometry3d::Identity())
 {

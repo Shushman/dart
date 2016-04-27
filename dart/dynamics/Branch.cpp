@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,8 +34,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/Branch.h"
-#include "dart/dynamics/BodyNode.h"
+#include "dart/dynamics/Branch.hpp"
+#include "dart/dynamics/BodyNode.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -84,7 +84,7 @@ bool Branch::isStillBranch() const
   if(!isAssembled())
     return false;
 
-  for(size_t i=0; i<mBodyNodes.size(); ++i)
+  for(std::size_t i=0; i<mBodyNodes.size(); ++i)
   {
     BodyNode* bn = mBodyNodes[i];
     if(bn->getNumChildBodyNodes() != mNumChildNodes[i])
@@ -108,7 +108,7 @@ void Branch::update()
 
   mNumChildNodes.clear();
   mNumChildNodes.reserve(mBodyNodes.size());
-  for(size_t i=0; i<mBodyNodes.size(); ++i)
+  for(std::size_t i=0; i<mBodyNodes.size(); ++i)
   {
     mNumChildNodes.push_back(mBodyNodes[i]->getNumChildBodyNodes());
   }

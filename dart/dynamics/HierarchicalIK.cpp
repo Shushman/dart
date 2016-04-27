@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,11 +34,12 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/DegreeOfFreedom.h"
-#include "dart/dynamics/HierarchicalIK.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/EndEffector.h"
-#include "dart/dynamics/Skeleton.h"
+#include "dart/dynamics/DegreeOfFreedom.hpp"
+#include "dart/dynamics/HierarchicalIK.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/EndEffector.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/optimizer/GradientDescentSolver.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -73,17 +74,17 @@ bool HierarchicalIK::solve(bool _applySolution)
     return false;
   }
 
-  const size_t nDofs = skel->getNumDofs();
+  const std::size_t nDofs = skel->getNumDofs();
   mProblem->setDimension(nDofs);
 
   mProblem->setInitialGuess(skel->getPositions());
 
   Eigen::VectorXd bounds(nDofs);
-  for(size_t i=0; i < nDofs; ++i)
+  for(std::size_t i=0; i < nDofs; ++i)
     bounds[i] = skel->getDof(i)->getPositionLowerLimit();
   mProblem->setLowerBounds(bounds);
 
-  for(size_t i=0; i < nDofs; ++i)
+  for(std::size_t i=0; i < nDofs; ++i)
     bounds[i] = skel->getDof(i)->getPositionUpperLimit();
   mProblem->setUpperBounds(bounds);
 
@@ -217,14 +218,14 @@ const std::vector<Eigen::MatrixXd>& HierarchicalIK::computeNullSpaces() const
 {
   bool recompute = false;
   const ConstSkeletonPtr& skel = getSkeleton();
-  const size_t nDofs = skel->getNumDofs();
-  if(static_cast<size_t>(mLastPositions.size()) != nDofs)
+  const std::size_t nDofs = skel->getNumDofs();
+  if(static_cast<std::size_t>(mLastPositions.size()) != nDofs)
   {
     recompute = true;
   }
   else
   {
-    for(size_t i=0; i < nDofs; ++i)
+    for(std::size_t i=0; i < nDofs; ++i)
     {
       if(mLastPositions[i] != skel->getDof(i)->getPosition())
       {
@@ -246,7 +247,7 @@ const std::vector<Eigen::MatrixXd>& HierarchicalIK::computeNullSpaces() const
 
   mNullSpaceCache.resize(hierarchy.size());
   bool zeroedNullSpace = false;
-  for(size_t i=0; i < hierarchy.size(); ++i)
+  for(std::size_t i=0; i < hierarchy.size(); ++i)
   {
     const std::vector< std::shared_ptr<InverseKinematics> >& level =
         hierarchy[i];
@@ -270,7 +271,7 @@ const std::vector<Eigen::MatrixXd>& HierarchicalIK::computeNullSpaces() const
     }
 
     mJacCache.resize(6, nDofs);
-    for(size_t j=0; j < level.size(); ++j)
+    for(std::size_t j=0; j < level.size(); ++j)
     {
       const std::shared_ptr<InverseKinematics>& ik = level[j];
 
@@ -278,12 +279,12 @@ const std::vector<Eigen::MatrixXd>& HierarchicalIK::computeNullSpaces() const
         continue;
 
       const math::Jacobian& J = ik->computeJacobian();
-      const std::vector<size_t>& dofs = ik->getDofs();
+      const std::vector<std::size_t>& dofs = ik->getDofs();
 
       mJacCache.setZero();
-      for(size_t d=0; d < dofs.size(); ++d)
+      for(std::size_t d=0; d < dofs.size(); ++d)
       {
-        size_t k = dofs[d];
+        std::size_t k = dofs[d];
         mJacCache.block<6,1>(0,k) = J.block<6,1>(0,d);
       }
 
@@ -459,21 +460,21 @@ double HierarchicalIK::Constraint::eval(const Eigen::VectorXd& _x)
   const IKHierarchy& hierarchy = hik->getIKHierarchy();
 
   double cost = 0.0;
-  for(size_t i=0; i < hierarchy.size(); ++i)
+  for(std::size_t i=0; i < hierarchy.size(); ++i)
   {
     const std::vector< std::shared_ptr<InverseKinematics> >& level =
         hierarchy[i];
 
-    for(size_t j=0; j < level.size(); ++j)
+    for(std::size_t j=0; j < level.size(); ++j)
     {
       const std::shared_ptr<InverseKinematics>& ik = level[j];
 
       if(!ik->isActive())
         continue;
 
-      const std::vector<size_t>& dofs = ik->getDofs();
+      const std::vector<std::size_t>& dofs = ik->getDofs();
       Eigen::VectorXd q(dofs.size());
-      for(size_t k=0; k < dofs.size(); ++k)
+      for(std::size_t k=0; k < dofs.size(); ++k)
         q[k] = _x[dofs[k]];
 
       InverseKinematics::ErrorMethod& method = ik->getErrorMethod();
@@ -494,17 +495,17 @@ void HierarchicalIK::Constraint::evalGradient(
 
   const IKHierarchy& hierarchy = hik->getIKHierarchy();
   const SkeletonPtr& skel = hik->getSkeleton();
-  const size_t nDofs = skel->getNumDofs();
+  const std::size_t nDofs = skel->getNumDofs();
   const std::vector<Eigen::MatrixXd>& nullspaces = hik->computeNullSpaces();
 
   _grad.setZero();
-  for(size_t i=0; i < hierarchy.size(); ++i)
+  for(std::size_t i=0; i < hierarchy.size(); ++i)
   {
     const std::vector< std::shared_ptr<InverseKinematics> >& level =
         hierarchy[i];
 
     mLevelGradCache.setZero(nDofs);
-    for(size_t j=0; j < level.size(); ++j)
+    for(std::size_t j=0; j < level.size(); ++j)
     {
       const std::shared_ptr<InverseKinematics>& ik = level[j];
 
@@ -512,9 +513,9 @@ void HierarchicalIK::Constraint::evalGradient(
         continue;
 
       // Grab only the dependent coordinates from q
-      const std::vector<size_t>& dofs = ik->getDofs();
+      const std::vector<std::size_t>& dofs = ik->getDofs();
       Eigen::VectorXd q(dofs.size());
-      for(size_t k=0; k < dofs.size(); ++k)
+      for(std::size_t k=0; k < dofs.size(); ++k)
         q[k] = _x[dofs[k]];
 
       // Compute the gradient of this specific error term
@@ -526,7 +527,7 @@ void HierarchicalIK::Constraint::evalGradient(
       method.evalGradient(q, gradMap);
 
       // Add the components of this gradient into the gradient of this level
-      for(size_t k=0; k < dofs.size(); ++k)
+      for(std::size_t k=0; k < dofs.size(); ++k)
         mLevelGradCache[dofs[k]] += mTempGradCache[k];
     }
 
@@ -589,12 +590,12 @@ void HierarchicalIK::copyOverSetup(
   newProblem->setObjective( cloneIkFunc(mProblem->getObjective(), _otherIK) );
 
   newProblem->removeAllEqConstraints();
-  for(size_t i=0; i < mProblem->getNumEqConstraints(); ++i)
+  for(std::size_t i=0; i < mProblem->getNumEqConstraints(); ++i)
     newProblem->addEqConstraint(
           cloneIkFunc(mProblem->getEqConstraint(i), _otherIK));
 
   newProblem->removeAllIneqConstraints();
-  for(size_t i=0; i < mProblem->getNumIneqConstraints(); ++i)
+  for(std::size_t i=0; i < mProblem->getNumIneqConstraints(); ++i)
     newProblem->addIneqConstraint(
           cloneIkFunc(mProblem->getIneqConstraint(i), _otherIK));
 
@@ -747,7 +748,7 @@ void WholeBodyIK::refreshIKHierarchy()
   // JacobianNode types, and also make the code more DRY.
 
   int highestLevel = -1;
-  for(size_t i=0; i < skel->getNumBodyNodes(); ++i)
+  for(std::size_t i=0; i < skel->getNumBodyNodes(); ++i)
   {
     BodyNode* bn = skel->getBodyNode(i);
     const std::shared_ptr<InverseKinematics>& ik = bn->getIK();
@@ -759,7 +760,7 @@ void WholeBodyIK::refreshIKHierarchy()
     }
   }
 
-  for(size_t i=0; i < skel->getNumEndEffectors(); ++i)
+  for(std::size_t i=0; i < skel->getNumEndEffectors(); ++i)
   {
     EndEffector* ee = skel->getEndEffector(i);
     const std::shared_ptr<InverseKinematics>& ik = ee->getIK();
@@ -782,7 +783,7 @@ void WholeBodyIK::refreshIKHierarchy()
   for(auto& level : mHierarchy)
     level.clear();
 
-  for(size_t i=0; i < skel->getNumBodyNodes(); ++i)
+  for(std::size_t i=0; i < skel->getNumBodyNodes(); ++i)
   {
     BodyNode* bn = skel->getBodyNode(i);
     const std::shared_ptr<InverseKinematics>& ik = bn->getIK();
@@ -791,7 +792,7 @@ void WholeBodyIK::refreshIKHierarchy()
       mHierarchy[ik->getHierarchyLevel()].push_back(ik);
   }
 
-  for(size_t i=0; i < skel->getNumEndEffectors(); ++i)
+  for(std::size_t i=0; i < skel->getNumEndEffectors(); ++i)
   {
     EndEffector* ee = skel->getEndEffector(i);
     const std::shared_ptr<InverseKinematics>& ik = ee->getIK();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s):
@@ -35,7 +35,7 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/MeshShape.h"
+#include "dart/dynamics/MeshShape.hpp"
 
 #include <limits>
 #include <string>
@@ -44,11 +44,11 @@
 #include <assimp/postprocess.h>
 #include <assimp/cimport.h>
 
-#include "dart/config.h"
-#include "dart/common/Console.h"
-#include "dart/common/LocalResourceRetriever.h"
-#include "dart/common/Uri.h"
-#include "dart/dynamics/AssimpInputResourceAdaptor.h"
+#include "dart/config.hpp"
+#include "dart/common/Console.hpp"
+#include "dart/common/LocalResourceRetriever.hpp"
+#include "dart/common/Uri.hpp"
+#include "dart/dynamics/AssimpInputResourceAdaptor.hpp"
 
 #if !(ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
 // We define our own constructor and destructor for aiScene, because it seems to
@@ -76,32 +76,32 @@ aiScene::~aiScene()
   delete mRootNode;
 
   if(mNumMeshes && mMeshes)
-    for(size_t a=0; a<mNumMeshes; ++a)
+    for(std::size_t a=0; a<mNumMeshes; ++a)
       delete mMeshes[a];
   delete[] mMeshes;
 
   if(mNumMaterials && mMaterials)
-    for(size_t a=0; a<mNumMaterials; ++a)
+    for(std::size_t a=0; a<mNumMaterials; ++a)
       delete mMaterials[a];
   delete[] mMaterials;
 
   if(mNumAnimations && mAnimations)
-    for(size_t a=0; a<mNumAnimations; ++a)
+    for(std::size_t a=0; a<mNumAnimations; ++a)
       delete mAnimations[a];
   delete[] mAnimations;
 
   if(mNumTextures && mTextures)
-    for(size_t a=0; a<mNumTextures; ++a)
+    for(std::size_t a=0; a<mNumTextures; ++a)
       delete mTextures[a];
   delete[] mTextures;
 
   if(mNumLights && mLights)
-    for(size_t a=0; a<mNumLights; ++a)
+    for(std::size_t a=0; a<mNumLights; ++a)
       delete mLights[a];
   delete[] mLights;
 
   if(mNumCameras && mCameras)
-    for(size_t a=0; a<mNumCameras; ++a)
+    for(std::size_t a=0; a<mNumCameras; ++a)
       delete mCameras[a];
   delete[] mCameras;
 }
@@ -115,13 +115,13 @@ aiMaterial::aiMaterial()
   mNumProperties = 0;
   mNumAllocated = 5;
   mProperties = new aiMaterialProperty*[5];
-  for(size_t i=0; i<5; ++i)
+  for(std::size_t i=0; i<5; ++i)
     mProperties[i] = nullptr;
 }
 
 aiMaterial::~aiMaterial()
 {
-  for(size_t i=0; i<mNumProperties; ++i)
+  for(std::size_t i=0; i<mNumProperties; ++i)
     delete mProperties[i];
 
   delete[] mProperties;
@@ -169,10 +169,10 @@ void MeshShape::update()
 //==============================================================================
 void MeshShape::notifyAlphaUpdate(double alpha)
 {
-  for(size_t i=0; i<mMesh->mNumMeshes; ++i)
+  for(std::size_t i=0; i<mMesh->mNumMeshes; ++i)
   {
     aiMesh* mesh = mMesh->mMeshes[i];
-    for(size_t j=0; j<mesh->mNumVertices; ++j)
+    for(std::size_t j=0; j<mesh->mNumVertices; ++j)
       mesh->mColors[0][j][3] = alpha;
   }
 }
@@ -356,7 +356,7 @@ const aiScene* MeshShape::loadMesh(
   // might miss files with an .xml file ending, which would need to be looked
   // into to figure out whether they are collada files.
   std::string extension;
-  const size_t extensionIndex = _uri.find_last_of('.');
+  const std::size_t extensionIndex = _uri.find_last_of('.');
   if(extensionIndex != std::string::npos)
     extension = _uri.substr(extensionIndex);
 

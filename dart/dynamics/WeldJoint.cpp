@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,12 +34,12 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/WeldJoint.h"
+#include "dart/dynamics/WeldJoint.hpp"
 
 #include <string>
 
-#include "dart/math/Helpers.h"
-#include "dart/math/Geometry.h"
+#include "dart/math/Helpers.hpp"
+#include "dart/math/Geometry.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -71,7 +71,7 @@ const std::string& WeldJoint::getStaticType()
 }
 
 //==============================================================================
-bool WeldJoint::isCyclic(size_t /*_index*/) const
+bool WeldJoint::isCyclic(std::size_t /*_index*/) const
 {
   return false;
 }
@@ -87,7 +87,7 @@ void WeldJoint::setTransformFromParentBodyNode(const Eigen::Isometry3d& _T)
 {
   Joint::setTransformFromParentBodyNode(_T);
 
-  mT = mJointP.mT_ParentBodyToJoint * mJointP.mT_ChildBodyToJoint.inverse();
+  mT = Joint::mAspectProperties.mT_ParentBodyToJoint * Joint::mAspectProperties.mT_ChildBodyToJoint.inverse();
 }
 
 //==============================================================================
@@ -95,16 +95,15 @@ void WeldJoint::setTransformFromChildBodyNode(const Eigen::Isometry3d& _T)
 {
   Joint::setTransformFromChildBodyNode(_T);
 
-  mT = mJointP.mT_ParentBodyToJoint * mJointP.mT_ChildBodyToJoint.inverse();
+  mT = Joint::mAspectProperties.mT_ParentBodyToJoint * Joint::mAspectProperties.mT_ChildBodyToJoint.inverse();
 }
 
 //==============================================================================
-WeldJoint::WeldJoint(const Properties& _properties)
-  : ZeroDofJoint(_properties)
+WeldJoint::WeldJoint(const Properties& properties)
 {
-  // Inherited Joint Properties must be set in the final joint class or else we
+  // Inherited Aspects must be created in the final joint class or else we
   // get pure virtual function calls
-  ZeroDofJoint::setProperties(_properties);
+  createJointAspect(properties);
 }
 
 //==============================================================================

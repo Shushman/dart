@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,13 +34,13 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/ScrewJoint.h"
+#include "dart/dynamics/ScrewJoint.hpp"
 
 #include <string>
 
-#include "dart/math/Geometry.h"
-#include "dart/math/Helpers.h"
-#include "dart/dynamics/BodyNode.h"
+#include "dart/math/Geometry.hpp"
+#include "dart/math/Helpers.hpp"
+#include "dart/dynamics/BodyNode.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -62,15 +62,20 @@ void ScrewJoint::setProperties(const Properties& _properties)
 //==============================================================================
 void ScrewJoint::setProperties(const UniqueProperties& _properties)
 {
-  setAxis(_properties.mAxis);
-  setPitch(_properties.mPitch);
+  setAspectProperties(_properties);
+}
+
+//==============================================================================
+void ScrewJoint::setAspectProperties(const AspectProperties& properties)
+{
+  setAxis(properties.mAxis);
+  setPitch(properties.mPitch);
 }
 
 //==============================================================================
 ScrewJoint::Properties ScrewJoint::getScrewJointProperties() const
 {
-  return Properties(getSingleDofJointProperties(),
-                    getScrewJointAddon()->getProperties());
+  return Properties(getSingleDofJointProperties(), mAspectProperties);
 }
 
 //==============================================================================
@@ -112,7 +117,7 @@ const std::string& ScrewJoint::getStaticType()
 }
 
 //==============================================================================
-bool ScrewJoint::isCyclic(size_t /*_index*/) const
+bool ScrewJoint::isCyclic(std::size_t /*_index*/) const
 {
   return false;
 }
@@ -120,36 +125,48 @@ bool ScrewJoint::isCyclic(size_t /*_index*/) const
 //==============================================================================
 void ScrewJoint::setAxis(const Eigen::Vector3d& _axis)
 {
-  getScrewJointAddon()->setAxis(_axis);
+  if(_axis == mAspectProperties.mAxis)
+    return;
+
+  mAspectProperties.mAxis = _axis.normalized();
+  Joint::notifyPositionUpdate();
+  updateLocalJacobian();
+  Joint::incrementVersion();
 }
 
 //==============================================================================
 const Eigen::Vector3d& ScrewJoint::getAxis() const
 {
-  return getScrewJointAddon()->getAxis();
+  return mAspectProperties.mAxis;
 }
 
 //==============================================================================
 void ScrewJoint::setPitch(double _pitch)
 {
-  getScrewJointAddon()->setPitch(_pitch);
+  if(_pitch == mAspectProperties.mPitch)
+    return;
+
+  mAspectProperties.mPitch = _pitch;
+  Joint::notifyPositionUpdate();
+  updateLocalJacobian();
+  Joint::incrementVersion();
 }
 
 //==============================================================================
 double ScrewJoint::getPitch() const
 {
-  return getScrewJointAddon()->getPitch();
+  return mAspectProperties.mPitch;
 }
 
 //==============================================================================
-ScrewJoint::ScrewJoint(const Properties& _properties)
-  : detail::ScrewJointBase(_properties, common::NoArg)
+ScrewJoint::ScrewJoint(const Properties& properties)
+  : detail::ScrewJointBase(properties)
 {
-  createScrewJointAddon(_properties);
-
-  // Inherited Joint Properties must be set in the final joint class or else we
-  // get pure virtual function calls
-  SingleDofJoint::setProperties(_properties);
+  // Inherited Aspects must be created in the final joint class in reverse order
+  // or else we get pure virtual function calls
+  createScrewJointAspect(properties);
+  createSingleDofJointAspect(properties);
+  createJointAspect(properties);
 }
 
 //==============================================================================
@@ -161,24 +178,28 @@ Joint* ScrewJoint::clone() const
 //==============================================================================
 void ScrewJoint::updateLocalTransform() const
 {
+  using namespace dart::math::suffixes;
+
   Eigen::Vector6d S = Eigen::Vector6d::Zero();
   S.head<3>() = getAxis();
-  S.tail<3>() = getAxis()*getPitch()/DART_2PI;
-  mT = mJointP.mT_ParentBodyToJoint
+  S.tail<3>() = getAxis()*getPitch()*0.5_pi;
+  mT = Joint::mAspectProperties.mT_ParentBodyToJoint
        * math::expMap(S * getPositionStatic())
-       * mJointP.mT_ChildBodyToJoint.inverse();
+       * Joint::mAspectProperties.mT_ChildBodyToJoint.inverse();
   assert(math::verifyTransform(mT));
 }
 
 //==============================================================================
 void ScrewJoint::updateLocalJacobian(bool _mandatory) const
 {
+  using namespace dart::math::suffixes;
+
   if(_mandatory)
   {
     Eigen::Vector6d S = Eigen::Vector6d::Zero();
     S.head<3>() = getAxis();
-    S.tail<3>() = getAxis()*getPitch()/DART_2PI;
-    mJacobian = math::AdT(mJointP.mT_ChildBodyToJoint, S);
+    S.tail<3>() = getAxis()*getPitch()*0.5_pi;
+    mJacobian = math::AdT(Joint::mAspectProperties.mT_ChildBodyToJoint, S);
     assert(!math::isNan(mJacobian));
   }
 }

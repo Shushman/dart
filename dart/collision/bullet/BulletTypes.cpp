@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,7 +34,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/collision/bullet/BulletTypes.h"
+// Must be included before any Bullet headers.
+#include "dart/config.hpp"
+
+#include "dart/collision/bullet/BulletTypes.hpp"
 
 namespace dart {
 namespace collision {

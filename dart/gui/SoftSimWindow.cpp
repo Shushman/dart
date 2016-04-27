@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -40,9 +40,9 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/gui/SoftSimWindow.h"
+#include "dart/gui/SoftSimWindow.hpp"
 
-#include "dart/gui/LoadGlut.h"
+#include "dart/gui/LoadGlut.hpp"
 
 namespace dart {
 namespace gui {

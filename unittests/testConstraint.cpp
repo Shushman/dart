@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Sumit Jain <sumit@cc.gatech.edu>,
@@ -40,16 +40,16 @@
 #include <Eigen/Dense>
 #include <gtest/gtest.h>
 
-#include "TestHelpers.h"
+#include "TestHelpers.hpp"
 
-#include "dart/common/Console.h"
-#include "dart/math/Geometry.h"
-#include "dart/math/Helpers.h"
-#include "dart/collision/dart/DARTCollisionDetector.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/simulation/World.h"
-#include "dart/utils/SkelParser.h"
+#include "dart/common/Console.hpp"
+#include "dart/math/Geometry.hpp"
+#include "dart/math/Helpers.hpp"
+#include "dart/collision/dart/DARTCollisionDetector.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/simulation/World.hpp"
+#include "dart/utils/SkelParser.hpp"
 
 //==============================================================================
 class ConstraintTest : public ::testing::Test
@@ -63,7 +63,7 @@ public:
 
 protected:
   // Sets up the test fixture.
-  virtual void SetUp();
+  void SetUp() override;
 
   // Skel file list.
   std::vector<std::string> list;
@@ -116,9 +116,9 @@ void ConstraintTest::SingleContactTest(const std::string& /*_fileName*/)
   //----------------------------------------------------------------------------
   // Number of random state tests for each skeletons
 #ifndef NDEBUG  // Debug mode
-  // size_t testCount = 1;
+  // std::size_t testCount = 1;
 #else
-  // size_t testCount = 1;
+  // std::size_t testCount = 1;
 #endif
 
   WorldPtr world(new World);
@@ -126,7 +126,7 @@ void ConstraintTest::SingleContactTest(const std::string& /*_fileName*/)
   world->setGravity(Vector3d(0.0, -10.00, 0.0));
   world->setTimeStep(0.001);
   world->getConstraintSolver()->setCollisionDetector(
-        dart::common::make_unique<DARTCollisionDetector>());
+        DARTCollisionDetector::create());
 
   SkeletonPtr sphereSkel = createSphere(0.05, Vector3d(0.0, 1.0, 0.0));
   BodyNode* sphere = sphereSkel->getBodyNode(0);
@@ -157,12 +157,9 @@ void ConstraintTest::SingleContactTest(const std::string& /*_fileName*/)
 
   EXPECT_EQ((int)world->getNumSkeletons(), 2);
 
-  ConstraintSolver* cs = world->getConstraintSolver();
-  CollisionDetector* cd = cs->getCollisionDetector();
-
   // Lower and upper bound of configuration for system
-  // double lb = -1.5 * DART_PI;
-  // double ub =  1.5 * DART_PI;
+  // double lb = -1.5 * constantsd::pi();
+  // double ub =  1.5 * constantsd::pi();
 
   int maxSteps = 500;
   for (int i = 0; i < maxSteps; ++i)
@@ -173,14 +170,13 @@ void ConstraintTest::SingleContactTest(const std::string& /*_fileName*/)
 //    std::cout << "pos1:" << pos1.transpose() << std::endl;
 //    std::cout << "vel1:" << vel1.transpose() << std::endl;
 
-    cd->detectCollision(true, true);
-    if (cd->getNumContacts() == 0)
+    if (!world->checkCollision())
     {
       world->step();
       continue;
     }
 
-    // for (size_t j = 0; j < cd->getNumContacts(); ++j)
+    // for (std::size_t j = 0; j < cd->getNumContacts(); ++j)
     // {
       // Contact contact = cd->getContact(j);
       // Vector3d pos1 = sphere->getTransform().inverse() * contact.point;
@@ -192,9 +188,10 @@ void ConstraintTest::SingleContactTest(const std::string& /*_fileName*/)
 
     world->step();
 
-    for (size_t j = 0; j < cd->getNumContacts(); ++j)
+    const auto& result = world->getConstraintSolver()->getLastCollisionResult();
+
+    for (const auto& contact : result.getContacts())
     {
-      Contact contact = cd->getContact(j);
       Vector3d pos1 = sphere->getTransform().inverse() * contact.point;
       Vector3d vel1 = sphere->getLinearVelocity(pos1);
 

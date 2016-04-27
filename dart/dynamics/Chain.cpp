@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,8 +34,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/Chain.h"
-#include "dart/dynamics/FreeJoint.h"
+#include "dart/dynamics/Chain.hpp"
+#include "dart/dynamics/FreeJoint.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -114,7 +114,7 @@ ChainPtr Chain::create(BodyNode* _start, BodyNode* _target,
 
 //==============================================================================
 ChainPtr Chain::create(BodyNode* _start, BodyNode* _target,
-                       IncludeBoth_t, const std::string& _name)
+                       IncludeBothTag, const std::string& _name)
 {
   ChainPtr chain(new Chain(_start, _target, IncludeBoth, _name));
   chain->mPtr = chain;
@@ -129,7 +129,7 @@ bool Chain::isStillChain() const
 
   // Make sure there are no Branches and no parent FreeJoints on the BodyNodes
   // on the inside of the chain
-  for(size_t i=1; i<mBodyNodes.size()-1; ++i)
+  for(std::size_t i=1; i<mBodyNodes.size()-1; ++i)
   {
     if(mBodyNodes[i]->getNumChildBodyNodes() > 1)
       return false;
@@ -165,7 +165,7 @@ Chain::Chain(BodyNode* _start, BodyNode* _target, const std::string& _name)
 
 //==============================================================================
 Chain::Chain(BodyNode* _start, BodyNode* _target,
-             IncludeBoth_t, const std::string& _name)
+             IncludeBothTag, const std::string& _name)
   : Linkage(Chain::Criteria(_start, _target, true), _name)
 {
   // Do nothing

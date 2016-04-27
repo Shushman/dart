@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -36,16 +36,16 @@
 
 #include <gtest/gtest.h>
 
-#include "dart/common/sub_ptr.h"
-#include "dart/dynamics/SimpleFrame.h"
-#include "dart/dynamics/BoxShape.h"
+#include "dart/common/sub_ptr.hpp"
+#include "dart/dynamics/SimpleFrame.hpp"
+#include "dart/dynamics/BoxShape.hpp"
 
 using namespace dart;
 using namespace dynamics;
 
 TEST(Subjects, Notifications)
 {
-  sub_ptr<Detachable> entity_ptr = new Detachable(Frame::World(), "entity", false);
+  sub_ptr<Detachable> entity_ptr = new SimpleFrame(Frame::World(), "entity");
   sub_ptr<SimpleFrame> frame_ptr = new SimpleFrame(Frame::World(), "frame");
 
   EXPECT_TRUE(entity_ptr.valid());
@@ -68,7 +68,7 @@ Entity* getPointer(Entity* _ptr)
 
 TEST(Subjects, ImplicitConversion)
 {
-  sub_ptr<Entity> entity_ptr = new Entity(Frame::World(), "entity", false);
+  sub_ptr<Entity> entity_ptr = new SimpleFrame(Frame::World(), "entity");
 
   // This checks whether the sub_ptr class can successfully be implicitly
   // converted to the type of class it's supposed to be pointing to

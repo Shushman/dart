@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Karen Liu <karenliu@cc.gatech.edu>
@@ -40,14 +40,14 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/gui/GraphWindow.h"
+#include "dart/gui/GraphWindow.hpp"
 
 #include <cstdio>
 #include <iostream>
 #include <string>
 
-#include "dart/gui/GLFuncs.h"
-#include "dart/gui/LoadGlut.h"
+#include "dart/gui/GLFuncs.hpp"
+#include "dart/gui/LoadGlut.hpp"
 
 namespace dart {
 namespace gui {

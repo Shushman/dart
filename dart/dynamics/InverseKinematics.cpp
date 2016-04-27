@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,10 +34,11 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/InverseKinematics.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/DegreeOfFreedom.h"
-#include "dart/dynamics/SimpleFrame.h"
+#include "dart/dynamics/InverseKinematics.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/DegreeOfFreedom.hpp"
+#include "dart/dynamics/SimpleFrame.hpp"
+#include "dart/optimizer/GradientDescentSolver.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -84,24 +85,33 @@ bool InverseKinematics::solve(bool _applySolution)
   const SkeletonPtr& skel = getNode()->getSkeleton();
 
   Eigen::VectorXd bounds(mDofs.size());
-  for(size_t i=0; i < mDofs.size(); ++i)
+  for(std::size_t i=0; i < mDofs.size(); ++i)
     bounds[i] = skel->getDof(mDofs[i])->getPositionLowerLimit();
   mProblem->setLowerBounds(bounds);
 
-  for(size_t i=0; i < mDofs.size(); ++i)
+  for(std::size_t i=0; i < mDofs.size(); ++i)
     bounds[i] = skel->getDof(mDofs[i])->getPositionUpperLimit();
   mProblem->setUpperBounds(bounds);
+
+  // Many GradientMethod implementations use Joint::integratePositions, so we
+  // need to clear out any velocities that might be in the Skeleton and then
+  // reset those velocities later. This has been opened as issue #699.
+  Eigen::VectorXd originalVelocities = skel->getVelocities();
+  for(std::size_t i=0; i < skel->getNumDofs(); ++i)
+    skel->getDof(i)->setVelocity(0.0);
 
   if(_applySolution)
   {
     bool wasSolved = mSolver->solve();
     setPositions(mProblem->getOptimalSolution());
+    skel->setVelocities(originalVelocities);
     return wasSolved;
   }
 
   Eigen::VectorXd originalPositions = getPositions();
   bool wasSolved = mSolver->solve();
   setPositions(originalPositions);
+  skel->setVelocities(originalVelocities);
   return wasSolved;
 }
 
@@ -159,12 +169,12 @@ InverseKinematicsPtr InverseKinematics::clone(JacobianNode* _newNode) const
   newProblem->setObjective( cloneIkFunc(mProblem->getObjective(),newIK.get()) );
 
   newProblem->removeAllEqConstraints();
-  for(size_t i=0; i < mProblem->getNumEqConstraints(); ++i)
+  for(std::size_t i=0; i < mProblem->getNumEqConstraints(); ++i)
     newProblem->addEqConstraint(
           cloneIkFunc(mProblem->getEqConstraint(i), newIK.get()) );
 
   newProblem->removeAllIneqConstraints();
-  for(size_t i=0; i < mProblem->getNumIneqConstraints(); ++i)
+  for(std::size_t i=0; i < mProblem->getNumIneqConstraints(); ++i)
     newProblem->addIneqConstraint(
           cloneIkFunc(mProblem->getIneqConstraint(i), newIK.get()));
 
@@ -444,7 +454,7 @@ Eigen::Isometry3d InverseKinematics::TaskSpaceRegion::computeDesiredTransform(
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
 
   tf.rotate(_currentTf.linear());
-  for(size_t i=0; i < 3; ++i)
+  for(std::size_t i=0; i < 3; ++i)
   {
     const double angle = _error[i];
     Eigen::Vector3d axis(Eigen::Vector3d::Zero());
@@ -677,9 +687,9 @@ double InverseKinematics::GradientMethod::getComponentWiseClamp() const
 void InverseKinematics::GradientMethod::applyWeights(
     Eigen::VectorXd& _grad) const
 {
-  size_t numComponents =
+  std::size_t numComponents =
       std::min(_grad.size(), mGradientP.mComponentWeights.size());
-  for(size_t i = 0; i < numComponents; ++i)
+  for(std::size_t i = 0; i < numComponents; ++i)
     _grad[i] = mGradientP.mComponentWeights[i] * _grad[i];
 }
 
@@ -695,6 +705,32 @@ const Eigen::VectorXd&
 InverseKinematics::GradientMethod::getComponentWeights() const
 {
   return mGradientP.mComponentWeights;
+}
+
+//==============================================================================
+void InverseKinematics::GradientMethod::convertJacobianMethodOutputToGradient(
+    Eigen::VectorXd& grad, const std::vector<std::size_t>& dofs)
+{
+  const SkeletonPtr& skel = mIK->getNode()->getSkeleton();
+  mInitialPositionsCache = skel->getPositions(dofs);
+
+  for(std::size_t i=0; i < dofs.size(); ++i)
+    skel->getDof(dofs[i])->setVelocity(grad[i]);
+  // Velocities of unused DOFs should already be set to zero.
+
+  for(std::size_t i=0; i < dofs.size(); ++i)
+  {
+    Joint* joint = skel->getDof(dofs[i])->getJoint();
+    joint->integratePositions(1.0);
+
+    // Reset this joint's velocities to zero to avoid double-integrating
+    const std::size_t numJointDofs = joint->getNumDofs();
+    for(std::size_t j=0; j < numJointDofs; ++j)
+      joint->setVelocity(j, 0.0);
+  }
+
+  grad = skel->getPositions(dofs);
+  grad -= mInitialPositionsCache;
 }
 
 //==============================================================================
@@ -766,6 +802,7 @@ void InverseKinematics::JacobianDLS::computeGradient(
             J.transpose()*J).inverse() * J.transpose() * _error;
   }
 
+  convertJacobianMethodOutputToGradient(_grad, mIK->getDofs());
   applyWeights(_grad);
   clampGradient(_grad);
 }
@@ -813,6 +850,7 @@ void InverseKinematics::JacobianTranspose::computeGradient(
   const math::Jacobian& J = mIK->computeJacobian();
   _grad = J.transpose() * _error;
 
+  convertJacobianMethodOutputToGradient(_grad, mIK->getDofs());
   applyWeights(_grad);
   clampGradient(_grad);
 }
@@ -828,7 +866,7 @@ InverseKinematics::Analytical::Solution::Solution(
 
 //==============================================================================
 InverseKinematics::Analytical::UniqueProperties::UniqueProperties(
-    ExtraDofUtilization_t extraDofUtilization, double extraErrorLengthClamp)
+    ExtraDofUtilization extraDofUtilization, double extraErrorLengthClamp)
   : mExtraDofUtilization(extraDofUtilization),
     mExtraErrorLengthClamp(extraErrorLengthClamp)
 {
@@ -837,7 +875,7 @@ InverseKinematics::Analytical::UniqueProperties::UniqueProperties(
 
 //==============================================================================
 InverseKinematics::Analytical::UniqueProperties::UniqueProperties(
-    ExtraDofUtilization_t extraDofUtilization,
+    ExtraDofUtilization extraDofUtilization,
     double extraErrorLengthClamp,
     QualityComparison qualityComparator)
   : mExtraDofUtilization(extraDofUtilization),
@@ -856,10 +894,10 @@ void InverseKinematics::Analytical::UniqueProperties::resetQualityComparisonFunc
                            const Eigen::VectorXd& worse,
                            const InverseKinematics* ik)
   {
-    const std::vector<size_t>& dofs = ik->getAnalytical()->getDofs();
+    const std::vector<std::size_t>& dofs = ik->getAnalytical()->getDofs();
     double biggestJump = 0.0;
     bool isBetter = true;
-    for(size_t i=0; i < dofs.size(); ++i)
+    for(std::size_t i=0; i < dofs.size(); ++i)
     {
       double q = ik->getNode()->getSkeleton()->getPosition(dofs[i]);
       const double& testBetter = std::abs(q - better[i]);
@@ -949,7 +987,7 @@ const std::vector<IK::Analytical::Solution>& IK::Analytical::getSolutions(
   mLimitViolationCache.clear();
   mLimitViolationCache.reserve(mSolutions.size());
 
-  for(size_t i=0; i < mSolutions.size(); ++i)
+  for(std::size_t i=0; i < mSolutions.size(); ++i)
   {
     const Solution& s = mSolutions[i];
     if(s.mValidity == VALID)
@@ -990,30 +1028,44 @@ const std::vector<IK::Analytical::Solution>& IK::Analytical::getSolutions(
 }
 
 //==============================================================================
-static void applyExtraDofGradient(Eigen::VectorXd& grad,
-                                  const Eigen::Vector6d& error,
-                                  const InverseKinematics* ik,
-                                  const std::vector<size_t>& extraDofs,
-                                  const Eigen::VectorXd& compWeights,
-                                  double compClamp)
+void InverseKinematics::Analytical::addExtraDofGradient(
+    Eigen::VectorXd& grad,
+    const Eigen::Vector6d& error,
+    ExtraDofUtilization /*utilization*/)
 {
-  const math::Jacobian& J = ik->computeJacobian();
-  const std::vector<int>& gradMap = ik->getDofMap();
+  mExtraDofGradCache.resize(mExtraDofs.size());
+  const math::Jacobian& J = mIK->computeJacobian();
+  const std::vector<int>& gradMap = mIK->getDofMap();
 
-  for(size_t i=0; i < extraDofs.size(); ++i)
+  for(std::size_t i=0; i < mExtraDofs.size(); ++i)
   {
-    size_t depIndex = extraDofs[i];
+    std::size_t depIndex = mExtraDofs[i];
     int gradIndex = gradMap[depIndex];
     if(gradIndex == -1)
       continue;
 
-    double weight = compWeights.size() > gradIndex ?
-          compWeights[gradIndex] : 1.0;
+    mExtraDofGradCache[i] = J.col(gradIndex).transpose()*error;
+  }
 
-    double dq = weight*J.col(gradIndex).transpose()*error;
+  convertJacobianMethodOutputToGradient(mExtraDofGradCache, mExtraDofs);
 
-    if(std::abs(dq) > compClamp)
-      dq = dq < 0 ? -compClamp : compClamp;
+  for(std::size_t i=0; i < mExtraDofs.size(); ++i)
+  {
+    std::size_t depIndex = mExtraDofs[i];
+    int gradIndex = gradMap[depIndex];
+    if(gradIndex == -1)
+      continue;
+
+    double weight = mGradientP.mComponentWeights.size() > gradIndex ?
+          mGradientP.mComponentWeights[gradIndex] : 1.0;
+
+    double dq = weight * mExtraDofGradCache[i];
+
+    if(std::abs(dq) > mGradientP.mComponentWiseClamp)
+    {
+      dq = dq < 0? -mGradientP.mComponentWiseClamp
+                 :  mGradientP.mComponentWiseClamp;
+    }
 
     grad[gradIndex] = dq;
   }
@@ -1038,17 +1090,15 @@ void InverseKinematics::Analytical::computeGradient(
     const Eigen::Vector6d& error = norm > mAnalyticalP.mExtraErrorLengthClamp?
           mAnalyticalP.mExtraErrorLengthClamp * _error/norm : _error;
 
-    applyExtraDofGradient(_grad, error, mIK, mExtraDofs,
-                          mGradientP.mComponentWeights,
-                          mGradientP.mComponentWiseClamp);
+    addExtraDofGradient(_grad, error, PRE_ANALYTICAL);
 
     const std::vector<int>& gradMap = mIK->getDofMap();
-    for(size_t i=0; i < mExtraDofs.size(); ++i)
+    for(std::size_t i=0; i < mExtraDofs.size(); ++i)
     {
-      const size_t depIndex = mExtraDofs[i];
+      const std::size_t depIndex = mExtraDofs[i];
       DegreeOfFreedom* dof = mIK->getNode()->getDependentDof(depIndex);
 
-      const size_t gradIndex = gradMap[depIndex];
+      const std::size_t gradIndex = gradMap[depIndex];
       dof->setPosition(dof->getPosition() - _grad[gradIndex]);
     }
   }
@@ -1059,13 +1109,12 @@ void InverseKinematics::Analytical::computeGradient(
     return;
 
   const Eigen::VectorXd& bestSolution = mSolutions[0].mConfig;
-  int bestValidity = mSolutions[0].mValidity;
   mConfigCache = getPositions();
 
   const std::vector<int>& analyticalToDependent = mDofMap;
   const std::vector<int>& dependentToGradient = mIK->getDofMap();
 
-  for(size_t i=0; i < analyticalToDependent.size(); ++i)
+  for(std::size_t i=0; i < analyticalToDependent.size(); ++i)
   {
     if(analyticalToDependent[i] == -1)
       continue;
@@ -1078,8 +1127,7 @@ void InverseKinematics::Analytical::computeGradient(
   }
 
   if(POST_ANALYTICAL == mAnalyticalP.mExtraDofUtilization
-     && mExtraDofs.size() > 0
-     && (bestValidity != VALID) )
+     && mExtraDofs.size() > 0 )
   {
     setPositions(bestSolution);
 
@@ -1093,9 +1141,7 @@ void InverseKinematics::Analytical::computeGradient(
     if(norm > mAnalyticalP.mExtraErrorLengthClamp)
       postError = mAnalyticalP.mExtraErrorLengthClamp*postError/norm;
 
-    applyExtraDofGradient(_grad, postError, mIK, mExtraDofs,
-                          mGradientP.mComponentWeights,
-                          mGradientP.mComponentWiseClamp);
+    addExtraDofGradient(_grad, postError, POST_ANALYTICAL);
   }
 }
 
@@ -1114,13 +1160,13 @@ Eigen::VectorXd InverseKinematics::Analytical::getPositions() const
 
 //==============================================================================
 void InverseKinematics::Analytical::setExtraDofUtilization(
-    ExtraDofUtilization_t _utilization)
+    ExtraDofUtilization _utilization)
 {
   mAnalyticalP.mExtraDofUtilization = _utilization;
 }
 
 //==============================================================================
-IK::Analytical::ExtraDofUtilization_t
+IK::Analytical::ExtraDofUtilization
 IK::Analytical::getExtraDofUtilization() const
 {
   return mAnalyticalP.mExtraDofUtilization;
@@ -1161,8 +1207,8 @@ InverseKinematics::Analytical::getAnalyticalProperties() const
 //==============================================================================
 void InverseKinematics::Analytical::constructDofMap()
 {
-  const std::vector<size_t>& analyticalDofs = getDofs();
-  const std::vector<size_t>& nodeDofs =
+  const std::vector<std::size_t>& analyticalDofs = getDofs();
+  const std::vector<std::size_t>& nodeDofs =
       mIK->getNode()->getDependentGenCoordIndices();
 
   mDofMap.clear();
@@ -1171,10 +1217,10 @@ void InverseKinematics::Analytical::constructDofMap()
   std::vector<bool> isExtraDof;
   isExtraDof.resize(nodeDofs.size(), true);
 
-  for(size_t i=0; i < analyticalDofs.size(); ++i)
+  for(std::size_t i=0; i < analyticalDofs.size(); ++i)
   {
     mDofMap[i] = -1;
-    for(size_t j=0; j < nodeDofs.size(); ++j)
+    for(std::size_t j=0; j < nodeDofs.size(); ++j)
     {
       if(analyticalDofs[i] == nodeDofs[j])
       {
@@ -1202,7 +1248,7 @@ void InverseKinematics::Analytical::constructDofMap()
   mExtraDofs.reserve(isExtraDof.size());
 
   const std::vector<int>& gradDofMap = mIK->getDofMap();
-  for(size_t i=0; i < isExtraDof.size(); ++i)
+  for(std::size_t i=0; i < isExtraDof.size(); ++i)
   {
     if( isExtraDof[i] && (gradDofMap[i] > -1) )
       mExtraDofs.push_back(i);
@@ -1212,13 +1258,13 @@ void InverseKinematics::Analytical::constructDofMap()
 //==============================================================================
 void InverseKinematics::Analytical::checkSolutionJointLimits()
 {
-  const std::vector<size_t>& dofs = getDofs();
-  for(size_t i=0; i < mSolutions.size(); ++i)
+  const std::vector<std::size_t>& dofs = getDofs();
+  for(std::size_t i=0; i < mSolutions.size(); ++i)
   {
     Solution& s = mSolutions[i];
     const Eigen::VectorXd& q = s.mConfig;
 
-    for(size_t j=0; j < dofs.size(); ++j)
+    for(std::size_t j=0; j < dofs.size(); ++j)
     {
       DegreeOfFreedom* dof = mIK->getNode()->getSkeleton()->getDof(dofs[j]);
       if(q[j] < dof->getPositionLowerLimit()
@@ -1250,13 +1296,13 @@ bool InverseKinematics::isActive() const
 }
 
 //==============================================================================
-void InverseKinematics::setHierarchyLevel(size_t _level)
+void InverseKinematics::setHierarchyLevel(std::size_t _level)
 {
   mHierarchyLevel = _level;
 }
 
 //==============================================================================
-size_t InverseKinematics::getHierarchyLevel() const
+std::size_t InverseKinematics::getHierarchyLevel() const
 {
   return mHierarchyLevel;
 }
@@ -1282,17 +1328,17 @@ void InverseKinematics::useWholeBody()
 }
 
 //==============================================================================
-void InverseKinematics::setDofs(const std::vector<size_t>& _dofs)
+void InverseKinematics::setDofs(const std::vector<std::size_t>& _dofs)
 {
   mDofs = _dofs;
-  const std::vector<size_t>& entityDependencies =
+  const std::vector<std::size_t>& entityDependencies =
       mNode->getDependentGenCoordIndices();
 
   mDofMap.resize(entityDependencies.size());
-  for(size_t i=0; i<mDofMap.size(); ++i)
+  for(std::size_t i=0; i<mDofMap.size(); ++i)
   {
     mDofMap[i] = -1;
-    for(size_t j=0; j<mDofs.size(); ++j)
+    for(std::size_t j=0; j<mDofs.size(); ++j)
     {
       if(mDofs[j] == entityDependencies[i])
       {
@@ -1308,7 +1354,7 @@ void InverseKinematics::setDofs(const std::vector<size_t>& _dofs)
 }
 
 //==============================================================================
-const std::vector<size_t>& InverseKinematics::getDofs() const
+const std::vector<std::size_t>& InverseKinematics::getDofs() const
 {
   return mDofs;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author: Tobias Kunz <tobias@gatech.edu>
@@ -36,7 +36,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "Path.h"
+#include "dart/planning/Path.hpp"
+
 #include <iostream>
 #include <vector>
 #include <algorithm>

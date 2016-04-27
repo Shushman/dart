@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Karen Liu <karenliu@cc.gatech.edu>
@@ -39,28 +39,29 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/gui/SimWindow.h"
+#include "dart/gui/SimWindow.hpp"
 
 #include <cstdio>
 #include <iostream>
 #include <string>
 
-#include "dart/simulation/World.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/SoftBodyNode.h"
-#include "dart/dynamics/BoxShape.h"
-#include "dart/dynamics/EllipsoidShape.h"
-#include "dart/dynamics/CylinderShape.h"
-#include "dart/dynamics/PlaneShape.h"
-#include "dart/dynamics/MeshShape.h"
-#include "dart/dynamics/SoftMeshShape.h"
-#include "dart/dynamics/LineSegmentShape.h"
-#include "dart/constraint/ConstraintSolver.h"
-#include "dart/collision/CollisionDetector.h"
-#include "dart/gui/LoadGlut.h"
-#include "dart/gui/GLFuncs.h"
-#include "dart/gui/GraphWindow.h"
-#include "dart/utils/FileInfoWorld.h"
+#include "dart/simulation/World.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/EllipsoidShape.hpp"
+#include "dart/dynamics/CylinderShape.hpp"
+#include "dart/dynamics/PlaneShape.hpp"
+#include "dart/dynamics/MeshShape.hpp"
+#include "dart/dynamics/SoftMeshShape.hpp"
+#include "dart/dynamics/LineSegmentShape.hpp"
+#include "dart/dynamics/Marker.hpp"
+#include "dart/constraint/ConstraintSolver.hpp"
+#include "dart/collision/CollisionDetector.hpp"
+#include "dart/gui/LoadGlut.hpp"
+#include "dart/gui/GLFuncs.hpp"
+#include "dart/gui/GraphWindow.hpp"
+#include "dart/utils/FileInfoWorld.hpp"
 
 namespace dart {
 namespace gui {
@@ -115,7 +116,7 @@ void SimWindow::drawSkels()
 //==============================================================================
 void SimWindow::drawEntities()
 {
-  for (size_t i = 0; i < mWorld->getNumSimpleFrames(); ++i)
+  for (std::size_t i = 0; i < mWorld->getNumSimpleFrames(); ++i)
     drawShapeFrame(mWorld->getSimpleFrame(i).get());
 }
 
@@ -140,14 +141,14 @@ void SimWindow::draw() {
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   if (!mSimulating) {
       if (mPlayFrame < mWorld->getRecording()->getNumFrames()) {
-      size_t nSkels = mWorld->getNumSkeletons();
-      for (size_t i = 0; i < nSkels; i++) {
-        // size_t start = mWorld->getIndex(i);
-        // size_t size = mWorld->getSkeleton(i)->getNumDofs();
+      std::size_t nSkels = mWorld->getNumSkeletons();
+      for (std::size_t i = 0; i < nSkels; i++) {
+        // std::size_t start = mWorld->getIndex(i);
+        // std::size_t size = mWorld->getSkeleton(i)->getNumDofs();
         mWorld->getSkeleton(i)->setPositions(mWorld->getRecording()->getConfig(mPlayFrame, i));
       }
       if (mShowMarkers) {
-        // size_t sumDofs = mWorld->getIndex(nSkels);
+        // std::size_t sumDofs = mWorld->getIndex(nSkels);
         int nContact = mWorld->getRecording()->getNumContacts(mPlayFrame);
         for (int i = 0; i < nContact; i++) {
             Eigen::Vector3d v = mWorld->getRecording()->getContactPoint(mPlayFrame, i);
@@ -167,11 +168,11 @@ void SimWindow::draw() {
     }
   } else {
     if (mShowMarkers) {
-      collision::CollisionDetector* cd =
-          mWorld->getConstraintSolver()->getCollisionDetector();
-      for (size_t k = 0; k < cd->getNumContacts(); k++) {
-        Eigen::Vector3d v = cd->getContact(k).point;
-        Eigen::Vector3d f = cd->getContact(k).force / 10.0;
+      const auto result =
+          mWorld->getConstraintSolver()->getLastCollisionResult();
+      for (const auto& contact : result.getContacts()) {
+        Eigen::Vector3d v = contact.point;
+        Eigen::Vector3d f = contact.force / 10.0;
         glBegin(GL_LINES);
         glVertex3f(v[0], v[1], v[2]);
         glVertex3f(v[0] + f[0], v[1] + f[1], v[2] + f[2]);
@@ -326,7 +327,7 @@ void SimWindow::drawBodyNode(const dynamics::BodyNode* bodyNode,
   mRI->transform(bodyNode->getRelativeTransform());
 
   // _ri->pushName(???); TODO(MXG): What should we do about this for Frames?
-  auto shapeNodes = bodyNode->getShapeNodesWith<dynamics::VisualAddon>();
+  auto shapeNodes = bodyNode->getShapeNodesWith<dynamics::VisualAspect>();
   for (const auto& shapeNode : shapeNodes)
     drawShapeFrame(shapeNode, color, useDefaultColor);
   // _ri.popName();
@@ -366,16 +367,16 @@ void SimWindow::drawShapeFrame(const dynamics::ShapeFrame* shapeFrame,
   if (!mRI)
     return;
 
-  const auto& visualAddon = shapeFrame->getVisualAddon();
+  const auto& visualAspect = shapeFrame->getVisualAspect();
 
-  if (!visualAddon || visualAddon->isHidden())
+  if (!visualAspect || visualAspect->isHidden())
     return;
 
   mRI->pushMatrix();
   mRI->transform(shapeFrame->getRelativeTransform());
 
   if (useDefaultColor)
-    drawShape(shapeFrame->getShape().get(), visualAddon->getRGBA());
+    drawShape(shapeFrame->getShape().get(), visualAspect->getRGBA());
   else
     drawShape(shapeFrame->getShape().get(), color);
 

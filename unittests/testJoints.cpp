@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -37,24 +37,24 @@
 #include <array>
 #include <iostream>
 #include <gtest/gtest.h>
-#include "TestHelpers.h"
+#include "TestHelpers.hpp"
 
-#include "dart/math/Geometry.h"
-#include "dart/math/Helpers.h"
-#include "dart/dynamics/BallJoint.h"
-#include "dart/dynamics/FreeJoint.h"
-#include "dart/dynamics/PrismaticJoint.h"
-#include "dart/dynamics/RevoluteJoint.h"
-#include "dart/dynamics/TranslationalJoint.h"
-#include "dart/dynamics/UniversalJoint.h"
-#include "dart/dynamics/WeldJoint.h"
-#include "dart/dynamics/EulerJoint.h"
-#include "dart/dynamics/ScrewJoint.h"
-#include "dart/dynamics/PlanarJoint.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/simulation/World.h"
-#include "dart/utils/SkelParser.h"
+#include "dart/math/Geometry.hpp"
+#include "dart/math/Helpers.hpp"
+#include "dart/dynamics/BallJoint.hpp"
+#include "dart/dynamics/FreeJoint.hpp"
+#include "dart/dynamics/PrismaticJoint.hpp"
+#include "dart/dynamics/RevoluteJoint.hpp"
+#include "dart/dynamics/TranslationalJoint.hpp"
+#include "dart/dynamics/UniversalJoint.hpp"
+#include "dart/dynamics/WeldJoint.hpp"
+#include "dart/dynamics/EulerJoint.hpp"
+#include "dart/dynamics/ScrewJoint.hpp"
+#include "dart/dynamics/PlanarJoint.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/simulation/World.hpp"
+#include "dart/utils/SkelParser.hpp"
 
 using namespace dart;
 using namespace dart::math;
@@ -93,7 +93,7 @@ public:
 
 protected:
   // Sets up the test fixture.
-  virtual void SetUp();
+  void SetUp() override;
 
   std::vector<SimpleFrame*> frames;
 };
@@ -119,7 +119,7 @@ const std::vector<SimpleFrame*>& JOINTS::getFrames() const
 //==============================================================================
 void JOINTS::randomizeRefFrames()
 {
-  for(size_t i=0; i<frames.size(); ++i)
+  for(std::size_t i=0; i<frames.size(); ++i)
   {
     SimpleFrame* F = frames[i];
 
@@ -162,8 +162,8 @@ void JOINTS::kinematicsTest(const typename JointType::Properties& _properties)
 
     for (int i = 0; i < dof; ++i)
     {
-      q(i) = random(-DART_PI*1.0, DART_PI*1.0);
-      dq(i) = random(-DART_PI*1.0, DART_PI*1.0);
+      q(i) = random(-constantsd::pi()*1.0, constantsd::pi()*1.0);
+      dq(i) = random(-constantsd::pi()*1.0, constantsd::pi()*1.0);
     }
 
     skeleton->setPositions(q);
@@ -447,8 +447,8 @@ TEST_F(JOINTS, POSITION_LIMIT)
   EXPECT_TRUE(joint0 != nullptr);
   EXPECT_TRUE(joint1 != nullptr);
 
-  double limit0 = DART_PI / 6.0;
-  double limit1 = DART_PI / 6.0;
+  double limit0 = constantsd::pi() / 6.0;
+  double limit1 = constantsd::pi() / 6.0;
 
   joint0->setPositionLimitEnforced(true);
   joint0->setPositionLowerLimit(0, -limit0);
@@ -629,6 +629,8 @@ TEST_F(JOINTS, JOINT_COULOMB_FRICTION)
 =======
 SkeletonPtr createPendulum(Joint::ActuatorType actType)
 {
+  using namespace dart::math::suffixes;
+
   Vector3d dim(1, 1, 1);
   Vector3d offset(0, 0, 2);
 
@@ -637,10 +639,10 @@ SkeletonPtr createPendulum(Joint::ActuatorType actType)
 
   pendulum->disableSelfCollision();
 
-  for (size_t i = 0; i < pendulum->getNumBodyNodes(); ++i)
+  for (std::size_t i = 0; i < pendulum->getNumBodyNodes(); ++i)
   {
     auto bodyNode = pendulum->getBodyNode(i);
-    bodyNode->removeAllShapeNodesWith<CollisionAddon>();
+    bodyNode->removeAllShapeNodesWith<CollisionAspect>();
   }
 
   // Joint common setting
@@ -648,7 +650,7 @@ SkeletonPtr createPendulum(Joint::ActuatorType actType)
   EXPECT_NE(joint, nullptr);
 
   joint->setActuatorType(actType);
-  joint->setPosition(0, 90.0 * DART_RADIAN);
+  joint->setPosition(0, 90.0_deg);
   joint->setDampingCoefficient(0, 0.0);
   joint->setSpringStiffness(0, 0.0);
   joint->setPositionLimitEnforced(true);
@@ -660,11 +662,13 @@ SkeletonPtr createPendulum(Joint::ActuatorType actType)
 //==============================================================================
 void testServoMotor()
 {
-  size_t numPendulums = 7;
+  using namespace dart::math::suffixes;
+
+  std::size_t numPendulums = 7;
   double timestep = 1e-3;
   double tol = 1e-9;
-  double posUpperLimit = 90.0 * DART_RADIAN;
-  double posLowerLimit = 45.0 * DART_RADIAN;
+  double posUpperLimit = 90.0_deg;
+  double posLowerLimit = 45.0_deg;
   double sufficient_force   = 1e+5;
   double insufficient_force = 1e-1;
 
@@ -713,7 +717,7 @@ void testServoMotor()
 
   std::vector<SkeletonPtr> pendulums(numPendulums);
   std::vector<JointPtr> joints(numPendulums);
-  for (size_t i = 0; i < numPendulums; ++i)
+  for (std::size_t i = 0; i < numPendulums; ++i)
   {
     pendulums[i] = createPendulum(Joint::SERVO);
     joints[i] = pendulums[i]->getJoint(0);
@@ -733,18 +737,18 @@ void testServoMotor()
   joints[3]->setPositionUpperLimit(0, posUpperLimit);
   joints[3]->setPositionLowerLimit(0, posLowerLimit);
 
-  joints[4]->setForceUpperLimit(0, DART_DBL_INF);
-  joints[4]->setForceLowerLimit(0, -DART_DBL_INF);
+  joints[4]->setForceUpperLimit(0, constantsd::inf());
+  joints[4]->setForceLowerLimit(0, -constantsd::inf());
   joints[4]->setPositionUpperLimit(0, posUpperLimit);
   joints[4]->setPositionLowerLimit(0, posLowerLimit);
 
   joints[5]->setForceUpperLimit(0, sufficient_force);
   joints[5]->setForceLowerLimit(0, -sufficient_force);
-  joints[5]->setCoulombFriction(0, DART_DBL_INF);
+  joints[5]->setCoulombFriction(0, constantsd::inf());
 
-  joints[6]->setForceUpperLimit(0, DART_DBL_INF);
-  joints[6]->setForceLowerLimit(0, -DART_DBL_INF);
-  joints[6]->setCoulombFriction(0, DART_DBL_INF);
+  joints[6]->setForceUpperLimit(0, constantsd::inf());
+  joints[6]->setForceLowerLimit(0, -constantsd::inf());
+  joints[6]->setCoulombFriction(0, constantsd::inf());
 
   for (auto pendulum : pendulums)
     world->addSkeleton(pendulum);
@@ -773,7 +777,7 @@ void testServoMotor()
     world->step();
 
     std::vector<double> jointVels(numPendulums);
-    for (size_t j = 0; j < numPendulums; ++j)
+    for (std::size_t j = 0; j < numPendulums; ++j)
       jointVels[j] = joints[j]->getVelocity(0);
 
     EXPECT_NEAR(jointVels[0], 0.0, tol);
@@ -841,11 +845,11 @@ TEST_F(JOINTS, JOINT_COULOMB_FRICTION_AND_POSITION_LIMIT)
   joint0->setPositionLimitEnforced(true);
   joint1->setPositionLimitEnforced(true);
 
-  const double ll = -DART_PI/12.0; // -15 degree
-  const double ul = +DART_PI/12.0; // +15 degree
+  const double ll = -constantsd::pi()/12.0; // -15 degree
+  const double ul = +constantsd::pi()/12.0; // +15 degree
 
-  size_t dof0 = joint0->getNumDofs();
-  for (size_t i = 0; i < dof0; ++i)
+  std::size_t dof0 = joint0->getNumDofs();
+  for (std::size_t i = 0; i < dof0; ++i)
   {
     joint0->setPosition(i, 0.0);
     joint0->setPosition(i, 0.0);
@@ -853,8 +857,8 @@ TEST_F(JOINTS, JOINT_COULOMB_FRICTION_AND_POSITION_LIMIT)
     joint0->setPositionUpperLimit(i, ul);
   }
 
-  size_t dof1 = joint1->getNumDofs();
-  for (size_t i = 0; i < dof1; ++i)
+  std::size_t dof1 = joint1->getNumDofs();
+  for (std::size_t i = 0; i < dof1; ++i)
   {
     joint1->setPosition(i, 0.0);
     joint1->setPosition(i, 0.0);
@@ -929,7 +933,7 @@ template<int N>
 Eigen::Matrix<double,N,1> random_vec(double limit=100)
 {
   Eigen::Matrix<double,N,1> v;
-  for(size_t i=0; i<N; ++i)
+  for(std::size_t i=0; i<N; ++i)
     v[i] = math::random(-std::abs(limit), std::abs(limit));
   return v;
 }
@@ -1003,7 +1007,7 @@ TEST_F(JOINTS, CONVENIENCE_FUNCTIONS)
   balljoint->setTransformFromChildBodyNode(random_transform());
 
   // Test a hundred times
-  for(size_t n=0; n<100; ++n)
+  for(std::size_t n=0; n<100; ++n)
   {
     // -- convert transforms to positions and then positions back to transforms
     Eigen::Isometry3d desired_freejoint_tf = random_transform();
@@ -1046,7 +1050,7 @@ TEST_F(JOINTS, CONVENIENCE_FUNCTIONS)
     desired_tfs.push_back(desired_balljoint_tf);
     actual_tfs.push_back(actual_balljoint_tf);
 
-    for(size_t i=0; i<joints.size(); ++i)
+    for(std::size_t i=0; i<joints.size(); ++i)
     {
       Joint* joint = joints[i];
       BodyNode* bn = bns[i];

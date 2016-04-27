@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael Koval <mkoval@cs.cmu.edu>
@@ -35,9 +35,9 @@
  */
 
 #include <iostream>
-#include "dart/common/Console.h"
-#include "dart/common/Uri.h"
-#include "dart/utils/CompositeResourceRetriever.h"
+#include "dart/common/Console.hpp"
+#include "dart/common/Uri.hpp"
+#include "dart/utils/CompositeResourceRetriever.hpp"
 
 namespace dart {
 namespace utils {

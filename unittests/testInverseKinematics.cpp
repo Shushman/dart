@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -37,9 +37,9 @@
 #include <iostream>
 #include <gtest/gtest.h>
 
-#include "dart/config.h"
-#include "dart/math/Helpers.h"
-#include "TestHelpers.h"
+#include "dart/config.hpp"
+#include "dart/math/Helpers.hpp"
+#include "TestHelpers.hpp"
 
 using namespace Eigen;
 using namespace dart;
@@ -52,23 +52,23 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
   SkeletonPtr robot = Skeleton::create();
 
   // Create the first link
-  BodyNode::Properties node(std::string("link1"));
+  BodyNode::Properties node(BodyNode::AspectProperties("link1"));
   node.mInertia.setLocalCOM(Vector3d(0.0, 0.0, dim1(2)/2.0));
   std::shared_ptr<Shape> shape(new BoxShape(dim1));
 
   BodyNode* parent_node = robot->createJointAndBodyNodePair<FreeJoint>(nullptr,
     MultiDofJoint<6>::Properties(std::string("joint1")), node).second;
-  parent_node->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(
+  parent_node->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(
         shape);
 
   // Create the second link
-  node = BodyNode::Properties(std::string("link2"));
+  node = BodyNode::Properties(BodyNode::AspectProperties("link2"));
   node.mInertia.setLocalCOM(Vector3d(0.0, 0.0, dim2(2)/2.0));
   shape = std::shared_ptr<Shape>(new BoxShape(dim2));
 
   std::pair<Joint*, BodyNode*> pair2 = add1DofJoint(
-        robot, parent_node, node, "joint2", 0.0, -DART_PI, DART_PI, type2);
-  pair2.second->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(
+        robot, parent_node, node, "joint2", 0.0, -constantsd::pi(), constantsd::pi(), type2);
+  pair2.second->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(
         shape);
 
   Joint* joint = pair2.first;
@@ -91,9 +91,9 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //{
 //  const double TOLERANCE = 1e-6;
 //#if BUILD_TYPE_RELEASE
-//  const size_t numRandomTests = 100;
+//  const std::size_t numRandomTests = 100;
 //#else
-//  const size_t numRandomTests = 10;
+//  const std::size_t numRandomTests = 10;
 //#endif
 
 //  // Create two link robot
@@ -102,7 +102,7 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //  SkeletonPtr robot = createFreeFloatingTwoLinkRobot(
 //                      Vector3d(0.3, 0.3, l1),
 //                      Vector3d(0.3, 0.3, l2), DOF_ROLL);
-//  size_t dof = robot->getNumDofs();
+//  std::size_t dof = robot->getNumDofs();
 //  VectorXd oldConfig = robot->getPositions();
 
 //  BodyNode* body1 = robot->getBodyNode(0);
@@ -114,7 +114,7 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //  //------------------------- Free joint test ----------------------------------
 //  // The parent joint of body1 is free joint so body1 should be able to
 //  // transform to arbitrary tramsformation.
-//  for (size_t i = 0; i < numRandomTests; ++i)
+//  for (std::size_t i = 0; i < numRandomTests; ++i)
 //  {
 //    // Get desiredT2 by transforming body1 to arbitrary transformation
 //    Isometry3d desiredT1 = math::expMap(Vector6d::Random());
@@ -132,7 +132,7 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //  //----------------------- Revolute joint test ---------------------------------
 //  // The parent joint of body2 is revolute joint so body2 can rotate along the
 //  // axis of the revolute joint.
-//  for (size_t i = 0; i < numRandomTests; ++i)
+//  for (std::size_t i = 0; i < numRandomTests; ++i)
 //  {
 //    // Store the original transformation and joint angle
 //    Isometry3d oldT2 = body2->getWorldTransform();
@@ -159,7 +159,7 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //  }
 
 //  //---------------- Revolute joint test with joint limit ----------------------
-//  for (size_t i = 0; i < numRandomTests; ++i)
+//  for (std::size_t i = 0; i < numRandomTests; ++i)
 //  {
 //    // Set joint limit
 //    joint2->setPositionLowerLimit(0, DART_RADIAN *  0.0);
@@ -171,7 +171,7 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 
 //    // Get desiredT2 by rotating the revolute joint with random angle out of
 //    // the joint limit range
-//    joint2->setPosition(0, math::random(DART_RADIAN * 15.5, DART_PI));
+//    joint2->setPosition(0, math::random(DART_RADIAN * 15.5, constantsd::pi()));
 //    robot->setConfigs(robot->getPositions(), true, false, false);
 //    Isometry3d desiredT2 = body2->getWorldTransform();
 
@@ -205,9 +205,9 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //{
 //  const double TOLERANCE = 1e-4;
 //#if BUILD_TYPE_RELEASE
-//  const size_t numRandomTests = 100;
+//  const std::size_t numRandomTests = 100;
 //#else
-//  const size_t numRandomTests = 10;
+//  const std::size_t numRandomTests = 10;
 //#endif
 
 //  // Create two link robot
@@ -226,7 +226,7 @@ SkeletonPtr createFreeFloatingTwoLinkRobot(Vector3d dim1,
 //  //------------------------- Free joint test ----------------------------------
 //  // The parent joint of body1 is free joint so body1 should be able to
 //  // transform to arbitrary tramsformation.
-//  for (size_t i = 0; i < numRandomTests; ++i)
+//  for (std::size_t i = 0; i < numRandomTests; ++i)
 //  {
 //    // Test for linear velocity
 //    Vector3d desiredVel = Vector3d::Random();

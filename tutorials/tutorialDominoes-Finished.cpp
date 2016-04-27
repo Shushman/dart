@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,7 +34,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dart.h"
+#include "dart/dart.hpp"
+#include "dart/gui/gui.hpp"
 
 const double default_domino_height = 0.3;
 const double default_domino_width = 0.4 * default_domino_height;
@@ -169,7 +170,7 @@ public:
     // Turn the control gains into matrix form
     Eigen::Matrix6d Kp = mKpOS * Eigen::Matrix6d::Identity();
 
-    size_t dofs = mManipulator->getNumDofs();
+    std::size_t dofs = mManipulator->getNumDofs();
     Eigen::MatrixXd Kd = mKdOS * Eigen::MatrixXd::Identity(dofs, dofs);
 
     // Compute the joint forces needed to exert the desired workspace force
@@ -262,36 +263,19 @@ public:
 
     newDomino->setPositions(x);
 
-    mWorld->addSkeleton(newDomino);
-
-    // Compute collisions
-    dart::collision::CollisionDetector* detector =
-        mWorld->getConstraintSolver()->getCollisionDetector();
-    detector->detectCollision(true, true);
-
     // Look through the collisions to see if any dominoes are penetrating
     // something
-    bool dominoCollision = false;
-    size_t collisionCount = detector->getNumContacts();
-    for(size_t i = 0; i < collisionCount; ++i)
-    {
-      // If neither of the colliding BodyNodes belongs to the floor, then we
-      // know the new domino is in contact with something it shouldn't be
-      const dart::collision::Contact& contact = detector->getContact(i);
-      if(contact.bodyNode1.lock()->getSkeleton() != mFloor
-         && contact.bodyNode2.lock()->getSkeleton() != mFloor)
-      {
-        dominoCollision = true;
-        break;
-      }
-    }
+    auto collisionEngine = mWorld->getConstraintSolver()->getCollisionDetector();
+    auto collisionGroup = mWorld->getConstraintSolver()->getCollisionGroup();
+    auto newGroup = collisionEngine->createCollisionGroup(newDomino.get());
 
-    if(dominoCollision)
-    {
-      // Remove the new domino, because it is penetrating an existing one
-      mWorld->removeSkeleton(newDomino);
-    }
-    else
+    dart::collision::CollisionOption option;
+    dart::collision::CollisionResult result;
+    bool dominoCollision
+        = collisionGroup->collide(newGroup.get(), option, result);
+
+    // If the new domino is not penetrating an existing one
+    if(!dominoCollision)
     {
       // Record the latest domino addition
       mAngles.push_back(angle);
@@ -429,7 +413,7 @@ SkeletonPtr createDomino()
         new BoxShape(Eigen::Vector3d(default_domino_depth,
                                      default_domino_width,
                                      default_domino_height)));
-  body->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
+  body->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(box);
 
   // Set up inertia for the domino
   dart::dynamics::Inertia inertia;
@@ -456,8 +440,8 @@ SkeletonPtr createFloor()
   std::shared_ptr<BoxShape> box(
         new BoxShape(Eigen::Vector3d(floor_width, floor_width, floor_height)));
   auto shapeNode
-      = body->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
-  shapeNode->getVisualAddon()->setColor(dart::Color::Black());
+      = body->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(box);
+  shapeNode->getVisualAspect()->setColor(dart::Color::Black());
 
   // Put the body into position
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());

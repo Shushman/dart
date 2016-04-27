@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Karen Liu <karenliu@cc.gatech.edu>
@@ -34,12 +34,12 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/utils/FileInfoWorld.h"
+#include "dart/utils/FileInfoWorld.hpp"
 
 #include <fstream>
 #include <string>
 
-#include "dart/simulation/Recording.h"
+#include "dart/simulation/Recording.hpp"
 
 namespace dart {
 namespace utils {
@@ -113,7 +113,7 @@ bool FileInfoWorld::loadFile(const char* _fName)
       }
 
     state.resize(tempState.size());
-    for (size_t j = 0; j < tempState.size(); j++)
+    for (std::size_t j = 0; j < tempState.size(); j++)
       state[j] = tempState[j];
     mRecord->addState(state);
     tempState.clear();

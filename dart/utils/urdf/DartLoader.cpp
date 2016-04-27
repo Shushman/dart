@@ -1,4 +1,40 @@
-#include "DartLoader.h"
+/*
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
+ * All rights reserved.
+ *
+ * Author(s): Ana C. Huamán Quispe <ahuaman3@gatech.edu>
+ *
+ * Georgia Tech Graphics Lab and Humanoid Robotics Lab
+ *
+ * Directed by Prof. C. Karen Liu and Prof. Mike Stilman
+ * <karenliu@cc.gatech.edu> <mstilman@cc.gatech.edu>
+ *
+ * This file is provided under the following "BSD-style" License:
+ *   Redistribution and use in source and binary forms, with or
+ *   without modification, are permitted provided that the following
+ *   conditions are met:
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+ *   CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ *   INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ *   DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ *   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+ *   USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+ *   AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *   LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *   ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *   POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include "dart/utils/urdf/DartLoader.hpp"
 
 #include <map>
 #include <iostream>
@@ -7,21 +43,21 @@
 #include <urdf_parser/urdf_parser.h>
 #include <urdf_world/world.h>
 
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/Joint.h"
-#include "dart/dynamics/RevoluteJoint.h"
-#include "dart/dynamics/PrismaticJoint.h"
-#include "dart/dynamics/WeldJoint.h"
-#include "dart/dynamics/FreeJoint.h"
-#include "dart/dynamics/PlanarJoint.h"
-#include "dart/dynamics/Shape.h"
-#include "dart/dynamics/BoxShape.h"
-#include "dart/dynamics/EllipsoidShape.h"
-#include "dart/dynamics/CylinderShape.h"
-#include "dart/dynamics/MeshShape.h"
-#include "dart/simulation/World.h"
-#include "dart/utils/urdf/urdf_world_parser.h"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/Joint.hpp"
+#include "dart/dynamics/RevoluteJoint.hpp"
+#include "dart/dynamics/PrismaticJoint.hpp"
+#include "dart/dynamics/WeldJoint.hpp"
+#include "dart/dynamics/FreeJoint.hpp"
+#include "dart/dynamics/PlanarJoint.hpp"
+#include "dart/dynamics/Shape.hpp"
+#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/EllipsoidShape.hpp"
+#include "dart/dynamics/CylinderShape.hpp"
+#include "dart/dynamics/MeshShape.hpp"
+#include "dart/simulation/World.hpp"
+#include "dart/utils/urdf/urdf_world_parser.hpp"
 
 using ModelInterfacePtr = boost::shared_ptr<urdf::ModelInterface>;
 
@@ -127,7 +163,7 @@ simulation::WorldPtr DartLoader::parseWorldString(
 
   simulation::WorldPtr world(new simulation::World);
 
-  for(size_t i = 0; i < worldInterface->models.size(); ++i)
+  for(std::size_t i = 0; i < worldInterface->models.size(); ++i)
   {
     const urdf_parsing::Entity& entity = worldInterface->models[i];
     dynamics::SkeletonPtr skeleton = modelInterfaceToSkeleton(
@@ -216,7 +252,7 @@ dynamics::SkeletonPtr DartLoader::modelInterfaceToSkeleton(
       return nullptr;
   }
 
-  for(size_t i = 0; i < root->child_links.size(); i++)
+  for(std::size_t i = 0; i < root->child_links.size(); i++)
   {
     if (!createSkeletonRecursive(
            skeleton, root->child_links[i].get(), rootNode,
@@ -250,7 +286,7 @@ bool DartLoader::createSkeletonRecursive(
   if(!result)
     return false;
   
-  for(size_t i = 0; i < _lk->child_links.size(); ++i)
+  for(std::size_t i = 0; i < _lk->child_links.size(); ++i)
   {
     if (!createSkeletonRecursive(_skel, _lk->child_links[i].get(), node,
                                  _baseUri, _resourceRetriever))
@@ -273,7 +309,7 @@ bool DartLoader::readFileToString(
     return false;
 
   // Safe because std::string is guaranteed to be contiguous in C++11.
-  const size_t size = resource->getSize();
+  const std::size_t size = resource->getSize();
   _output.resize(size);
   resource->read(&_output.front(), size, 1);
 
@@ -424,11 +460,11 @@ bool DartLoader::createDartNodeProperties(
   return true;
 }
 
-void setMaterial(dynamics::VisualAddon* visualAddon, const urdf::Visual* viz)
+void setMaterial(dynamics::VisualAspect* visualAspect, const urdf::Visual* viz)
 {
   if(viz->material)
   {
-    visualAddon->setColor(Eigen::Vector3d(viz->material->color.r,
+    visualAspect->setColor(Eigen::Vector3d(viz->material->color.r,
                                           viz->material->color.g,
                                           viz->material->color.b));
   }
@@ -455,9 +491,9 @@ bool DartLoader::createShapeNodes(
 
     if(shape)
     {
-      auto shapeNode = bodyNode->createShapeNodeWith<dynamics::VisualAddon>(shape);
+      auto shapeNode = bodyNode->createShapeNodeWith<dynamics::VisualAspect>(shape);
       shapeNode->setRelativeTransform(toEigen(visual->origin));
-      setMaterial(shapeNode->getVisualAddon(), visual.get());
+      setMaterial(shapeNode->getVisualAspect(), visual.get());
     }
     else
     {
@@ -474,7 +510,7 @@ bool DartLoader::createShapeNodes(
     if (shape)
     {
       auto shapeNode = bodyNode->createShapeNodeWith<
-          dynamics::CollisionAddon, dynamics::DynamicsAddon>(shape);
+          dynamics::CollisionAspect, dynamics::DynamicsAspect>(shape);
       shapeNode->setRelativeTransform(toEigen(collision->origin));
     }
     else

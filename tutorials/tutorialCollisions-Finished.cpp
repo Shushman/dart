@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -35,7 +35,9 @@
  */
 
 #include <random>
-#include "dart/dart.h"
+
+#include "dart/dart.hpp"
+#include "dart/gui/gui.hpp"
 
 const double default_shape_density = 1000; // kg/m^3
 const double default_shape_height  = 0.1;  // m
@@ -76,7 +78,7 @@ using namespace dart::simulation;
 void setupRing(const SkeletonPtr& ring)
 {
   // Set the spring and damping coefficients for the degrees of freedom
-  for(size_t i=6; i < ring->getNumDofs(); ++i)
+  for(std::size_t i=6; i < ring->getNumDofs(); ++i)
   {
     DegreeOfFreedom* dof = ring->getDof(i);
     dof->setSpringStiffness(ring_spring_stiffness);
@@ -84,23 +86,23 @@ void setupRing(const SkeletonPtr& ring)
   }
 
   // Compute the joint angle needed to form a ring
-  size_t numEdges = ring->getNumBodyNodes();
+  std::size_t numEdges = ring->getNumBodyNodes();
   double angle = 2*M_PI/numEdges;
 
   // Set the BallJoints so that they have the correct rest position angle
-  for(size_t i=1; i < ring->getNumJoints(); ++i)
+  for(std::size_t i=1; i < ring->getNumJoints(); ++i)
   {
     Joint* joint = ring->getJoint(i);
     Eigen::AngleAxisd rotation(angle, Eigen::Vector3d(0, 1, 0));
     Eigen::Vector3d restPos = BallJoint::convertToPositions(
           Eigen::Matrix3d(rotation));
 
-    for(size_t j=0; j<3; ++j)
+    for(std::size_t j=0; j<3; ++j)
       joint->setRestPosition(j, restPos[j]);
   }
 
   // Set the Joints to be in their rest positions
-  for(size_t i=6; i < ring->getNumDofs(); ++i)
+  for(std::size_t i=6; i < ring->getNumDofs(); ++i)
   {
     DegreeOfFreedom* dof = ring->getDof(i);
     dof->setPosition(dof->getRestPosition());
@@ -210,32 +212,25 @@ protected:
 
     // Add the object to the world
     object->setName(object->getName()+std::to_string(mSkelCount++));
-    mWorld->addSkeleton(object);
-
-    // Compute collisions
-    dart::collision::CollisionDetector* detector =
-        mWorld->getConstraintSolver()->getCollisionDetector();
-    detector->detectCollision(true, true);
 
     // Look through the collisions to see if the new object would start in
     // collision with something
-    bool collision = false;
-    size_t collisionCount = detector->getNumContacts();
-    for(size_t i = 0; i < collisionCount; ++i)
-    {
-      const dart::collision::Contact& contact = detector->getContact(i);
-      if(contact.bodyNode1.lock()->getSkeleton() == object
-         || contact.bodyNode2.lock()->getSkeleton() == object)
-      {
-        collision = true;
-        break;
-      }
-    }
+    auto collisionEngine = mWorld->getConstraintSolver()->getCollisionDetector();
+    auto collisionGroup = mWorld->getConstraintSolver()->getCollisionGroup();
+    auto newGroup = collisionEngine->createCollisionGroup(object.get());
 
-    // Refuse to add the object if it is in collision
-    if(collision)
+    dart::collision::CollisionOption option;
+    dart::collision::CollisionResult result;
+    bool collision = collisionGroup->collide(newGroup.get(), option, result);
+
+    // If the new object is not in collision
+    if(!collision)
     {
-      mWorld->removeSkeleton(object);
+      mWorld->addSkeleton(object);
+    }
+    else
+    {
+      // or refuse to add the object if it is in collision
       std::cout << "The new object spawned in a collision. "
                 << "It will not be added to the world." << std::endl;
       return false;
@@ -302,7 +297,7 @@ protected:
   /// it, if one existed
   void removeSkeleton(const SkeletonPtr& skel)
   {
-    for(size_t i=0; i<mJointConstraints.size(); ++i)
+    for(std::size_t i=0; i<mJointConstraints.size(); ++i)
     {
       const dart::constraint::JointConstraintPtr& constraint =
           mJointConstraints[i];
@@ -348,7 +343,7 @@ protected:
 
   /// Keep track of how many Skeletons we spawn to ensure we can give them all
   /// unique names
-  size_t mSkelCount;
+  std::size_t mSkelCount;
 
 };
 
@@ -372,7 +367,7 @@ BodyNode* addRigidBody(const SkeletonPtr& chain, const std::string& name,
 
   // Create the Joint and Body pair
   BodyNode* bn = chain->createJointAndBodyNodePair<JointType>(
-        parent, properties, BodyNode::Properties(name)).second;
+        parent, properties, BodyNode::AspectProperties(name)).second;
 
   // Make the shape based on the requested Shape type
   ShapePtr shape;
@@ -394,7 +389,7 @@ BodyNode* addRigidBody(const SkeletonPtr& chain, const std::string& name,
           default_shape_height*Eigen::Vector3d::Ones());
   }
 
-  bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
+  bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(shape);
 
   // Setup the inertia for the body
   Inertia inertia;
@@ -410,7 +405,7 @@ BodyNode* addRigidBody(const SkeletonPtr& chain, const std::string& name,
   if(parent)
   {
     Joint* joint = bn->getParentJoint();
-    for(size_t i=0; i < joint->getNumDofs(); ++i)
+    for(std::size_t i=0; i < joint->getNumDofs(); ++i)
       joint->getDof(i)->setDampingCoefficient(default_damping_coefficient);
   }
 
@@ -484,7 +479,7 @@ BodyNode* addSoftBody(const SkeletonPtr& chain, const std::string& name,
   soft_properties.mDampCoeff = default_soft_damping;
 
   // Create the Joint and Body pair
-  SoftBodyNode::Properties body_properties(BodyNode::Properties(name),
+  SoftBodyNode::Properties body_properties(BodyNode::AspectProperties(name),
                                            soft_properties);
   SoftBodyNode* bn = chain->createJointAndBodyNodePair<JointType, SoftBodyNode>(
         parent, joint_properties, body_properties).second;
@@ -496,10 +491,10 @@ BodyNode* addSoftBody(const SkeletonPtr& chain, const std::string& name,
   bn->setInertia(inertia);
 
   // Make the shape transparent
-  auto visualAddon = bn->getShapeNodesWith<VisualAddon>()[0]->getVisualAddon();
-  Eigen::Vector4d color = visualAddon->getRGBA();
+  auto visualAspect = bn->getShapeNodesWith<VisualAspect>()[0]->getVisualAspect();
+  Eigen::Vector4d color = visualAspect->getRGBA();
   color[3] = 0.4;
-  visualAddon->setRGBA(color);
+  visualAspect->setRGBA(color);
 
   return bn;
 }
@@ -507,12 +502,12 @@ BodyNode* addSoftBody(const SkeletonPtr& chain, const std::string& name,
 void setAllColors(const SkeletonPtr& object, const Eigen::Vector3d& color)
 {
   // Set the color of all the shapes in the object
-  for(size_t i=0; i < object->getNumBodyNodes(); ++i)
+  for(std::size_t i=0; i < object->getNumBodyNodes(); ++i)
   {
     BodyNode* bn = object->getBodyNode(i);
-    auto visualShapeNodes = bn->getShapeNodesWith<VisualAddon>();
+    auto visualShapeNodes = bn->getShapeNodesWith<VisualAspect>();
     for(auto visualShapeNode : visualShapeNodes)
-      visualShapeNode->getVisualAddon()->setColor(color);
+      visualShapeNode->getVisualAspect()->setColor(color);
   }
 }
 
@@ -571,7 +566,7 @@ SkeletonPtr createSoftBody()
   Eigen::Vector3d dims(width, width, height);
   dims *= 0.6;
   std::shared_ptr<BoxShape> box = std::make_shared<BoxShape>(dims);
-  bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
+  bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(box);
 
   Inertia inertia;
   inertia.setMass(default_shape_density * box->getVolume());
@@ -597,7 +592,7 @@ SkeletonPtr createHybridBody()
   double box_shape_height = default_shape_height;
   std::shared_ptr<BoxShape> box = std::make_shared<BoxShape>(
         box_shape_height*Eigen::Vector3d::Ones());
-  bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(box);
+  bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(box);
 
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
   tf.translation() = Eigen::Vector3d(box_shape_height/2.0, 0, 0);
@@ -623,8 +618,8 @@ SkeletonPtr createGround()
         Eigen::Vector3d(default_ground_width, default_ground_width,
                         default_wall_thickness));
   auto shapeNode
-      = bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
-  shapeNode->getVisualAddon()->setColor(Eigen::Vector3d(1.0, 1.0, 1.0));
+      = bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  shapeNode->getVisualAspect()->setColor(Eigen::Vector3d(1.0, 1.0, 1.0));
 
   return ground;
 }
@@ -639,8 +634,8 @@ SkeletonPtr createWall()
         Eigen::Vector3d(default_wall_thickness, default_ground_width,
                         default_wall_height));
   auto shapeNode
-      = bn->createShapeNodeWith<VisualAddon, CollisionAddon, DynamicsAddon>(shape);
-  shapeNode->getVisualAddon()->setColor(Eigen::Vector3d(0.8, 0.8, 0.8));
+      = bn->createShapeNodeWith<VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  shapeNode->getVisualAspect()->setColor(Eigen::Vector3d(0.8, 0.8, 0.8));
 
   Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
   tf.translation() = Eigen::Vector3d(

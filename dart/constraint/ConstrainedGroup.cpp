@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,15 +34,15 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/constraint/ConstrainedGroup.h"
+#include "dart/constraint/ConstrainedGroup.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <vector>
 
-#include "dart/common/Console.h"
-#include "dart/constraint/ConstraintBase.h"
-#include "dart/constraint/ConstraintSolver.h"
+#include "dart/common/Console.hpp"
+#include "dart/constraint/ConstraintBase.hpp"
+#include "dart/constraint/ConstraintSolver.hpp"
 
 namespace dart {
 namespace constraint {
@@ -69,13 +69,13 @@ void ConstrainedGroup::addConstraint(const ConstraintBasePtr& _constraint)
 }
 
 //==============================================================================
-size_t ConstrainedGroup::getNumConstraints() const
+std::size_t ConstrainedGroup::getNumConstraints() const
 {
   return mConstraints.size();
 }
 
 //==============================================================================
-ConstraintBasePtr ConstrainedGroup::getConstraint(size_t _index) const
+ConstraintBasePtr ConstrainedGroup::getConstraint(std::size_t _index) const
 {
   assert(_index < mConstraints.size());
   return mConstraints[_index];
@@ -110,11 +110,11 @@ bool ConstrainedGroup::containConstraint(
 #endif
 
 //==============================================================================
-size_t ConstrainedGroup::getTotalDimension() const
+std::size_t ConstrainedGroup::getTotalDimension() const
 {
-  size_t totalDim = 0;
+  std::size_t totalDim = 0;
 
-  for (size_t i = 0; i < mConstraints.size(); ++i)
+  for (std::size_t i = 0; i < mConstraints.size(); ++i)
     totalDim += mConstraints[i]->getDimension();
 
   return totalDim;

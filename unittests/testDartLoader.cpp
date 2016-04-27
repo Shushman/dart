@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael Koval <mkoval@cs.cmu.edu>
@@ -36,7 +36,7 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
-#include "dart/utils/urdf/DartLoader.h"
+#include "dart/utils/urdf/DartLoader.hpp"
 
 using dart::common::Uri;
 using dart::utils::DartLoader;

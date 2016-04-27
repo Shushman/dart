@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,14 +34,14 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/constraint/ConstraintBase.h"
+#include "dart/constraint/ConstraintBase.hpp"
 
 #include <cmath>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
 
-#include "dart/dynamics/Skeleton.h"
+#include "dart/dynamics/Skeleton.hpp"
 
 namespace dart {
 namespace constraint {
@@ -58,9 +58,15 @@ ConstraintBase::~ConstraintBase()
 }
 
 //==============================================================================
-size_t ConstraintBase::getDimension() const
+std::size_t ConstraintBase::getDimension() const
 {
   return mDim;
+}
+
+//==============================================================================
+void ConstraintBase::uniteSkeletons()
+{
+  // Do nothing
 }
 
 //==============================================================================

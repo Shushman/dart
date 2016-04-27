@@ -44,30 +44,28 @@
 #include <Eigen/StdVector>
 #include <tinyxml2.h>
 
-#include "dart/common/Console.h"
-#include "dart/common/LocalResourceRetriever.h"
-#include "dart/common/ResourceRetriever.h"
-#include "dart/common/Uri.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/SoftBodyNode.h"
-#include "dart/dynamics/BoxShape.h"
-#include "dart/dynamics/CylinderShape.h"
-#include "dart/dynamics/EllipsoidShape.h"
-#include "dart/dynamics/MeshShape.h"
-#include "dart/dynamics/WeldJoint.h"
-#include "dart/dynamics/PrismaticJoint.h"
-#include "dart/dynamics/RevoluteJoint.h"
-#include "dart/dynamics/ScrewJoint.h"
-#include "dart/dynamics/TranslationalJoint.h"
-#include "dart/dynamics/BallJoint.h"
-#include "dart/dynamics/FreeJoint.h"
-#include "dart/dynamics/EulerJoint.h"
-#include "dart/dynamics/UniversalJoint.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/simulation/World.h"
-#include "dart/utils/SkelParser.h"
-#include "dart/utils/XmlHelpers.h"
-#include "dart/utils/sdf/SdfParser.h"
+#include "dart/common/Console.hpp"
+#include "dart/common/LocalResourceRetriever.hpp"
+#include "dart/common/ResourceRetriever.hpp"
+#include "dart/common/Uri.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/CylinderShape.hpp"
+#include "dart/dynamics/EllipsoidShape.hpp"
+#include "dart/dynamics/MeshShape.hpp"
+#include "dart/dynamics/WeldJoint.hpp"
+#include "dart/dynamics/PrismaticJoint.hpp"
+#include "dart/dynamics/RevoluteJoint.hpp"
+#include "dart/dynamics/ScrewJoint.hpp"
+#include "dart/dynamics/BallJoint.hpp"
+#include "dart/dynamics/FreeJoint.hpp"
+#include "dart/dynamics/UniversalJoint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/simulation/World.hpp"
+#include "dart/utils/SkelParser.hpp"
+#include "dart/utils/XmlHelpers.hpp"
+#include "dart/utils/sdf/SdfParser.hpp"
 
 namespace dart {
 namespace utils {
@@ -186,7 +184,7 @@ void readCollisionShapeNode(
     const std::string& skelPath,
     const common::ResourceRetrieverPtr& retriever);
 
-void readAddons(
+void readAspects(
     const dynamics::SkeletonPtr& skeleton,
     tinyxml2::XMLElement* skeletonElement,
     const std::string& skelPath,
@@ -231,20 +229,8 @@ dynamics::BallJoint::Properties readBallJoint(
     const Eigen::Isometry3d& parentModelFrame,
     const std::string& name);
 
-dart::dynamics::EulerJoint* readEulerJoint(
-        tinyxml2::XMLElement* jointElement,
-    const Eigen::Isometry3d& parentModelFrame,
-    const std::string& name);
-
-dart::dynamics::TranslationalJoint::Properties readTranslationalJoint(
-        tinyxml2::XMLElement* jointElement,
-    const Eigen::Isometry3d& parentModelFrame,
-    const std::string& name);
-
-dynamics::FreeJoint::Properties readFreeJoint(
-        tinyxml2::XMLElement* jointElement,
-    const Eigen::Isometry3d& parentModelFrame,
-    const std::string& name);
+common::ResourceRetrieverPtr getRetriever(
+    const common::ResourceRetrieverPtr& retriever);
 
 } // anonymous namespace
 
@@ -253,15 +239,19 @@ dynamics::FreeJoint::Properties readFreeJoint(
 
 //==============================================================================
 simulation::WorldPtr readSdfFile(
-  const common::Uri& fileUri, const common::ResourceRetrieverPtr& retriever)
+  const common::Uri& fileUri,
+    const common::ResourceRetrieverPtr& nullOrRetriever)
 {
-  return readWorld(fileUri, retriever);
+  return readWorld(fileUri, nullOrRetriever);
 }
 
 //==============================================================================
-simulation::WorldPtr readWorld(const common::Uri& fileUri,
-                               const common::ResourceRetrieverPtr& retriever)
+simulation::WorldPtr readWorld(
+    const common::Uri& fileUri,
+    const common::ResourceRetrieverPtr& nullOrRetriever)
 {
+  const auto retriever = getRetriever(nullOrRetriever);
+
   //--------------------------------------------------------------------------
   // Load xml and create Document
   tinyxml2::XMLDocument _dartFile;
@@ -312,8 +302,11 @@ simulation::WorldPtr readWorld(const common::Uri& fileUri,
 
 //==============================================================================
 dynamics::SkeletonPtr readSkeleton(
-    const common::Uri& fileUri, const common::ResourceRetrieverPtr& retriever)
+    const common::Uri& fileUri,
+    const common::ResourceRetrieverPtr& nullOrRetriever)
 {
+  const auto retriever = getRetriever(nullOrRetriever);
+
   //--------------------------------------------------------------------------
   // Load xml and create Document
   tinyxml2::XMLDocument _dartFile;
@@ -497,9 +490,9 @@ dynamics::SkeletonPtr readSkeleton(
     body = sdfBodyNodes.begin();
   }
 
-  // Read addons here since addons cannot be added if the BodyNodes haven't
+  // Read aspects here since aspects cannot be added if the BodyNodes haven't
   // created yet.
-  readAddons(newSkeleton, skeletonElement, skelPath, retriever);
+  readAspects(newSkeleton, skeletonElement, skelPath, retriever);
 
   // Set positions to their initial values
   newSkeleton->resetPositions();
@@ -997,7 +990,7 @@ void readVisualizationShapeNode(
                       bodyNode->getName() + " - visual shape",
                       skelPath, retriever);
 
-  newShapeNode->createVisualAddon();
+  newShapeNode->createVisualAspect();
 }
 
 //==============================================================================
@@ -1012,11 +1005,11 @@ void readCollisionShapeNode(
                       bodyNode->getName() + " - collision shape",
                       skelPath, retriever);
 
-  newShapeNode->createCollisionAddon();
+  newShapeNode->createCollisionAspect();
 }
 
 //==============================================================================
-void readAddons(
+void readAspects(
     const dynamics::SkeletonPtr& skeleton,
     tinyxml2::XMLElement* skeletonElement,
     const std::string& skelPath,
@@ -1174,6 +1167,10 @@ SDFJoint readJoint(tinyxml2::XMLElement* _jointElement,
   Eigen::Isometry3d parentModelFrame =
       (childWorld * childToJoint).inverse() * _skeletonFrame;
 
+  if (type == std::string("fixed"))
+    newJoint.properties =
+        Eigen::make_aligned_shared<dynamics::WeldJoint::Properties>(
+          readWeldJoint(_jointElement, parentModelFrame, name));
   if (type == std::string("prismatic"))
     newJoint.properties =
         Eigen::make_aligned_shared<dynamics::PrismaticJoint::Properties>(
@@ -1456,23 +1453,17 @@ dynamics::BallJoint::Properties readBallJoint(
   return dynamics::BallJoint::Properties();
 }
 
-dynamics::TranslationalJoint::Properties readTranslationalJoint(
-    tinyxml2::XMLElement* /*_jointElement*/,
-    const Eigen::Isometry3d&,
-    const std::string&)
+//==============================================================================
+common::ResourceRetrieverPtr getRetriever(
+  const common::ResourceRetrieverPtr& retriever)
 {
-  return dynamics::TranslationalJoint::Properties();
+  if(retriever)
+    return retriever;
+  else
+    return std::make_shared<common::LocalResourceRetriever>();
 }
 
-dynamics::FreeJoint::Properties readFreeJoint(
-    tinyxml2::XMLElement* /*_jointElement*/,
-    const Eigen::Isometry3d&,
-    const std::string&)
-{
-  return dynamics::FreeJoint::Properties();
-}
-
-} // anonymouse
+} // anonymous namespace
 
 } // namespace SdfParser
 

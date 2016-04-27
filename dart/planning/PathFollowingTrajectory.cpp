@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author: Tobias Kunz <tobias@gatech.edu>
@@ -36,7 +36,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "PathFollowingTrajectory.h"
+#include "dart/planning/PathFollowingTrajectory.hpp"
+
 #include <limits>
 #include <iostream>
 #include <fstream>

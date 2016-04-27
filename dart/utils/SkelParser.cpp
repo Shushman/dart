@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,7 +34,7 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/utils/SkelParser.h"
+#include "dart/utils/SkelParser.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -43,40 +43,40 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 
-#include "dart/config.h"
-#include "dart/common/Console.h"
+#include "dart/config.hpp"
+#include "dart/common/Console.hpp"
+#include "dart/collision/CollisionObject.hpp"
 #if HAVE_BULLET_COLLISION
-  #include "dart/collision/bullet/BulletCollisionDetector.h"
+  #include "dart/collision/bullet/BulletCollisionDetector.hpp"
 #endif
-#include "dart/collision/dart/DARTCollisionDetector.h"
-#include "dart/collision/fcl/FCLCollisionDetector.h"
-#include "dart/collision/fcl_mesh/FCLMeshCollisionDetector.h"
-#include "dart/constraint/ConstraintSolver.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/SoftBodyNode.h"
-#include "dart/dynamics/ShapeNode.h"
-#include "dart/dynamics/BoxShape.h"
-#include "dart/dynamics/CylinderShape.h"
-#include "dart/dynamics/EllipsoidShape.h"
-#include "dart/dynamics/PlaneShape.h"
-#include "dart/dynamics/MeshShape.h"
-#include "dart/dynamics/SoftMeshShape.h"
-#include "dart/dynamics/Joint.h"
-#include "dart/dynamics/SingleDofJoint.h"
-#include "dart/dynamics/MultiDofJoint.h"
-#include "dart/dynamics/WeldJoint.h"
-#include "dart/dynamics/PrismaticJoint.h"
-#include "dart/dynamics/RevoluteJoint.h"
-#include "dart/dynamics/ScrewJoint.h"
-#include "dart/dynamics/TranslationalJoint.h"
-#include "dart/dynamics/BallJoint.h"
-#include "dart/dynamics/FreeJoint.h"
-#include "dart/dynamics/EulerJoint.h"
-#include "dart/dynamics/UniversalJoint.h"
-#include "dart/dynamics/PlanarJoint.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/Marker.h"
-#include "dart/utils/XmlHelpers.h"
+#include "dart/collision/dart/DARTCollisionDetector.hpp"
+#include "dart/collision/fcl/FCLCollisionDetector.hpp"
+#include "dart/constraint/ConstraintSolver.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/dynamics/ShapeNode.hpp"
+#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/CylinderShape.hpp"
+#include "dart/dynamics/EllipsoidShape.hpp"
+#include "dart/dynamics/PlaneShape.hpp"
+#include "dart/dynamics/MeshShape.hpp"
+#include "dart/dynamics/SoftMeshShape.hpp"
+#include "dart/dynamics/Joint.hpp"
+#include "dart/dynamics/SingleDofJoint.hpp"
+#include "dart/dynamics/MultiDofJoint.hpp"
+#include "dart/dynamics/WeldJoint.hpp"
+#include "dart/dynamics/PrismaticJoint.hpp"
+#include "dart/dynamics/RevoluteJoint.hpp"
+#include "dart/dynamics/ScrewJoint.hpp"
+#include "dart/dynamics/TranslationalJoint.hpp"
+#include "dart/dynamics/BallJoint.hpp"
+#include "dart/dynamics/FreeJoint.hpp"
+#include "dart/dynamics/EulerJoint.hpp"
+#include "dart/dynamics/UniversalJoint.hpp"
+#include "dart/dynamics/PlanarJoint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/Marker.hpp"
+#include "dart/utils/XmlHelpers.hpp"
 
 namespace dart {
 
@@ -122,6 +122,7 @@ struct SkelBodyNode
 {
   BodyPropPtr properties;
   Eigen::Isometry3d initTransform;
+  std::vector<dynamics::Marker::BasicProperties> markers;
   std::string type;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
@@ -145,10 +146,10 @@ using BodyMap = Eigen::aligned_map<std::string, SkelBodyNode>;
 using JointMap = std::map<std::string, SkelJoint>;
 
 // first: Order that Joint appears in file | second: Child BodyNode name
-using IndexToJoint = std::map<size_t, std::string>;
+using IndexToJoint = std::map<std::size_t, std::string>;
 
 // first: Child BodyNode name | second: Order that Joint appears in file
-using JointToIndex = std::map<std::string, size_t>;
+using JointToIndex = std::map<std::string, std::size_t>;
 
 simulation::WorldPtr readWorld(
     tinyxml2::XMLElement* _worldElement,
@@ -179,7 +180,7 @@ dynamics::ShapePtr readShape(
     const common::ResourceRetrieverPtr& retriever);
 
 /// Read marker
-dynamics::Marker::Properties readMarker(
+dynamics::Marker::BasicProperties readMarker(
     tinyxml2::XMLElement* _markerElement);
 
 void readJoint(
@@ -261,7 +262,7 @@ void readCollisionShapeNode(
     const common::Uri& baseUri,
     const common::ResourceRetrieverPtr& retriever);
 
-void readAddons(
+void readAspects(
     const dynamics::SkeletonPtr& skeleton,
     tinyxml2::XMLElement* skeletonElement,
     const common::Uri& baseUri,
@@ -318,7 +319,7 @@ dynamics::ShapePtr readShape(
     const common::Uri& baseUri,
     const common::ResourceRetrieverPtr& retriever);
 
-dynamics::Marker::Properties readMarker(
+dynamics::Marker::BasicProperties readMarker(
     tinyxml2::XMLElement* _markerElement);
 
 void readJoint(tinyxml2::XMLElement* _jointElement,
@@ -333,13 +334,13 @@ void getDofAttributeIfItExists(
     const std::string& _element_type,
     const tinyxml2::XMLElement* _xmlElement,
     const std::string& _jointName,
-    size_t _index);
+    std::size_t _index);
 
 void setDofLimitAttributes(
     tinyxml2::XMLElement* _dofElement,
     const std::string& _element_type,
     const std::string& _jointName,
-    size_t _index,
+    std::size_t _index,
     double* lower, double* upper, double* initial);
 
 template <typename PropertyType>
@@ -347,21 +348,21 @@ void readAllDegreesOfFreedom(tinyxml2::XMLElement* _jointElement,
                                     PropertyType& _properties,
                                     SkelJoint& _joint,
                                     const std::string& _jointName,
-                                    size_t _numDofs);
+                                    std::size_t _numDofs);
 
 template <typename PropertyType>
 void readDegreeOfFreedom(tinyxml2::XMLElement* _dofElement,
                                 PropertyType& properties,
                                 SkelJoint& joint,
                                 const std::string& jointName,
-                                size_t numDofs);
+                                std::size_t numDofs);
 
 template <typename PropertyType>
 void readJointDynamicsAndLimit(tinyxml2::XMLElement* _jointElement,
                                       PropertyType& _properties,
                                       SkelJoint& _joint,
                                       const std::string& _name,
-                                      size_t _numAxis);
+                                      std::size_t _numAxis);
 
 JointPropPtr readWeldJoint(
     tinyxml2::XMLElement* _jointElement,
@@ -562,13 +563,13 @@ void readVisualizationShapeNode(
                       bodyNode->getName() + " - visual shape",
                       baseUri, retriever);
 
-  auto visualAddon = newShapeNode->getVisualAddon(true);
+  auto visualAspect = newShapeNode->getVisualAspect(true);
 
   // color
   if (hasElement(vizShapeNodeEle, "color"))
   {
     Eigen::Vector3d color = getValueVector3d(vizShapeNodeEle, "color");
-    visualAddon->setColor(color);
+    visualAspect->setColor(color);
   }
 }
 
@@ -584,19 +585,19 @@ void readCollisionShapeNode(
                       bodyNode->getName() + " - collision shape",
                       baseUri, retriever);
 
-  auto collisionAddon = newShapeNode->getCollisionAddon(true);
-  newShapeNode->createDynamicsAddon();
+  auto collisionAspect = newShapeNode->getCollisionAspect(true);
+  newShapeNode->createDynamicsAspect();
 
   // collidable
   if (hasElement(collShapeNodeEle, "collidable"))
   {
     const bool collidable = getValueDouble(collShapeNodeEle, "collidable");
-    collisionAddon->setCollidable(collidable);
+    collisionAspect->setCollidable(collidable);
   }
 }
 
 //==============================================================================
-void readAddons(
+void readAspects(
     const dynamics::SkeletonPtr& skeleton,
     tinyxml2::XMLElement* skeletonElement,
     const common::Uri& baseUri,
@@ -715,21 +716,35 @@ simulation::WorldPtr readWorld(
     }
 
     // Collision detector
-    std::unique_ptr<collision::CollisionDetector> collision_detector;
+    std::shared_ptr<collision::CollisionDetector> collision_detector;
 
     if (hasElement(physicsElement, "collision_detector"))
     {
       std::string strCD = getValueString(physicsElement, "collision_detector");
 
       if (strCD == "fcl_mesh")
-        collision_detector.reset(new collision::FCLMeshCollisionDetector);
+      {
+        collision_detector = collision::FCLCollisionDetector::create();
+        auto cd = std::static_pointer_cast<collision::FCLCollisionDetector>(
+              collision_detector);
+        cd->setPrimitiveShapeType(collision::FCLCollisionDetector::MESH);
+        cd->setContactPointComputationMethod(
+              collision::FCLCollisionDetector::DART);
+      }
       else if (strCD == "fcl")
-        collision_detector.reset(new collision::FCLCollisionDetector);
+      {
+        collision_detector = collision::FCLCollisionDetector::create();
+        auto cd = std::static_pointer_cast<collision::FCLCollisionDetector>(
+              collision_detector);
+        cd->setPrimitiveShapeType(collision::FCLCollisionDetector::PRIMITIVE);
+        cd->setContactPointComputationMethod(
+              collision::FCLCollisionDetector::DART);
+      }
       else if (strCD == "dart")
-        collision_detector.reset(new collision::DARTCollisionDetector);
+        collision_detector = collision::DARTCollisionDetector::create();
 #if HAVE_BULLET_COLLISION
       else if (strCD == "bullet")
-        collision_detector.reset(new collision::BulletCollisionDetector);
+        collision_detector = collision::BulletCollisionDetector::create();
 #endif
       else
         dtwarn << "Unknown collision detector[" << strCD << "]. "
@@ -737,10 +752,16 @@ simulation::WorldPtr readWorld(
     }
 
     if (!collision_detector)
-      collision_detector.reset(new collision::FCLMeshCollisionDetector);
+    {
+      collision_detector = collision::FCLCollisionDetector::create();
+      auto cd = std::static_pointer_cast<collision::FCLCollisionDetector>(
+            collision_detector);
+      cd->setPrimitiveShapeType(collision::FCLCollisionDetector::MESH);
+      cd->setContactPointComputationMethod(
+            collision::FCLCollisionDetector::DART);
+    }
 
-    newWorld->getConstraintSolver()->setCollisionDetector(
-      std::move(collision_detector));
+    newWorld->getConstraintSolver()->setCollisionDetector(collision_detector);
   }
 
   //--------------------------------------------------------------------------
@@ -895,6 +916,10 @@ bool createJointAndNodePair(dynamics::SkeletonPtr skeleton,
   newJoint->setAccelerations(joint.acceleration);
   newJoint->setForces(joint.force);
 
+  dynamics::BodyNode* bn = pair.second;
+  for(std::size_t i=0; i < body.markers.size(); ++i)
+    bn->createNode<dynamics::Marker>(body.markers[i]);
+
   return true;
 }
 
@@ -1010,9 +1035,9 @@ dynamics::SkeletonPtr readSkeleton(
     it = joints.find(nextJoint->second);
   }
 
-  // Read addons here since addons cannot be added if the BodyNodes haven't
+  // Read aspects here since aspects cannot be added if the BodyNodes haven't
   // created yet.
-  readAddons(newSkeleton, _skeletonElement, _baseUri, _retriever);
+  readAspects(newSkeleton, _skeletonElement, _baseUri, _retriever);
 
   newSkeleton->resetPositions();
   newSkeleton->resetVelocities();
@@ -1098,17 +1123,17 @@ SkelBodyNode readBodyNode(
     }
   }
 
+  SkelBodyNode skelBodyNode;
+  skelBodyNode.properties = newBodyNode;
+  skelBodyNode.initTransform = initTransform;
+
   //--------------------------------------------------------------------------
   // marker
   ElementEnumerator markers(_bodyNodeElement, "marker");
   while (markers.next())
   {
-    newBodyNode->mMarkerProperties.push_back(readMarker(markers.get()));
+    skelBodyNode.markers.push_back(readMarker(markers.get()));
   }
-
-  SkelBodyNode skelBodyNode;
-  skelBodyNode.properties = newBodyNode;
-  skelBodyNode.initTransform = initTransform;
 
   return skelBodyNode;
 }
@@ -1307,7 +1332,7 @@ dynamics::ShapePtr readShape(
 }
 
 //==============================================================================
-dynamics::Marker::Properties readMarker(
+dynamics::Marker::BasicProperties readMarker(
     tinyxml2::XMLElement* _markerElement)
 {
   // Name attribute
@@ -1318,7 +1343,9 @@ dynamics::Marker::Properties readMarker(
   if (hasElement(_markerElement, "offset"))
     offset = getValueVector3d(_markerElement, "offset");
 
-  dynamics::Marker::Properties newMarker(name, offset);
+  dynamics::Marker::BasicProperties newMarker;
+  newMarker.mName = name;
+  newMarker.mRelativeTf.translation() = offset;
 
   return newMarker;
 }
@@ -1347,6 +1374,8 @@ void readJoint(tinyxml2::XMLElement* _jointElement,
     joint.properties = readPrismaticJoint(_jointElement, joint, name);
   else if (joint.type == std::string("revolute"))
     joint.properties = readRevoluteJoint(_jointElement, joint, name);
+  else if (joint.type == std::string("screw"))
+    joint.properties = readScrewJoint(_jointElement, joint, name);
   else if (joint.type == std::string("universal"))
     joint.properties = readUniversalJoint(_jointElement, joint, name);
   else if (joint.type == std::string("ball"))
@@ -1490,7 +1519,7 @@ void readJoint(tinyxml2::XMLElement* _jointElement,
   _joints[joint.childName] = joint;
 
   // Keep track of when each joint appeared in the file
-  size_t nextIndex;
+  std::size_t nextIndex;
   IndexToJoint::reverse_iterator lastIndex = _order.rbegin();
   if(lastIndex == _order.rend())
     nextIndex = 0;
@@ -1508,7 +1537,7 @@ void getDofAttributeIfItExists(
     const std::string& _element_type,
     const tinyxml2::XMLElement* _xmlElement,
     const std::string& _jointName,
-    size_t _index)
+    std::size_t _index)
 {
   if (_xmlElement->QueryDoubleAttribute(_attribute.c_str(), _value)
       == tinyxml2::XML_WRONG_ATTRIBUTE_TYPE)
@@ -1524,7 +1553,7 @@ void getDofAttributeIfItExists(
 void setDofLimitAttributes(tinyxml2::XMLElement* _dofElement,
                                   const std::string& _element_type,
                                   const std::string& _jointName,
-                                  size_t _index,
+                                  std::size_t _index,
                                   double* lower, double* upper, double* initial)
 {
   const tinyxml2::XMLElement* xmlElement
@@ -1540,7 +1569,7 @@ void setDofLimitAttributes(tinyxml2::XMLElement* _dofElement,
 // SingleDofJoint::Properties and MultiDofJoint::Properties
 struct DofProxy
 {
-  size_t index;
+  std::size_t index;
   bool valid;
 
   double* lowerPosition;
@@ -1568,7 +1597,7 @@ struct DofProxy
   std::string* name;
 
   DofProxy(dynamics::SingleDofJoint::Properties& properties,
-           SkelJoint& joint, size_t _index,
+           SkelJoint& joint, std::size_t _index,
            const std::string& jointName)
     : index(_index),
       valid(true),
@@ -1607,7 +1636,7 @@ struct DofProxy
 
   template <typename PropertyType>
   DofProxy(PropertyType& properties,
-           SkelJoint& joint, size_t _index,
+           SkelJoint& joint, std::size_t _index,
            const std::string& jointName)
     : index(_index),
       valid(true),
@@ -1652,7 +1681,7 @@ void readAllDegreesOfFreedom(tinyxml2::XMLElement* _jointElement,
                                     PropertyType& _properties,
                                     SkelJoint& _joint,
                                     const std::string& _jointName,
-                                    size_t _numDofs)
+                                    std::size_t _numDofs)
 {
   if(_joint.position.size() < (int)_numDofs)
   {
@@ -1690,7 +1719,7 @@ void readDegreeOfFreedom(tinyxml2::XMLElement* _dofElement,
                                 PropertyType& properties,
                                 SkelJoint& joint,
                                 const std::string& jointName,
-                                size_t numDofs)
+                                std::size_t numDofs)
 {
   int localIndex = -1;
   int xml_err = _dofElement->QueryIntAttribute("local_index", &localIndex);
@@ -1789,7 +1818,7 @@ void readJointDynamicsAndLimit(tinyxml2::XMLElement* _jointElement,
                                       PropertyType& _properties,
                                       SkelJoint& _joint,
                                       const std::string& _name,
-                                      size_t _numAxis)
+                                      std::size_t _numAxis)
 {
   // TODO(MXG): Consider printing warnings for these tags that recommends using
   // the dof tag instead, because all functionality of these tags have been
@@ -1801,7 +1830,7 @@ void readJointDynamicsAndLimit(tinyxml2::XMLElement* _jointElement,
   std::string axisName = "axis";
 
   // axis
-  for (size_t i = 0; i < _numAxis; ++i)
+  for (std::size_t i = 0; i < _numAxis; ++i)
   {
     if (i != 0)
       axisName = "axis" + std::to_string(i + 1);
@@ -2391,6 +2420,7 @@ JointPropPtr readFreeJoint(
       properties);
 }
 
+//==============================================================================
 common::ResourceRetrieverPtr getRetriever(
   const common::ResourceRetrieverPtr& _retriever)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,12 +34,12 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/constraint/JointConstraint.h"
+#include "dart/constraint/JointConstraint.hpp"
 
 #include <cassert>
 #include <iostream>
 
-#include "dart/common/Console.h"
+#include "dart/common/Console.hpp"
 
 #define DART_ERROR_ALLOWANCE 0.0
 #define DART_ERP     0.01

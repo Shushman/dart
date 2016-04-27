@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,10 +34,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/constraint/BalanceConstraint.h"
+#include "dart/constraint/BalanceConstraint.hpp"
 
-#include "dart/dynamics/Skeleton.h"
-#include "dart/dynamics/EndEffector.h"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/EndEffector.hpp"
 
 namespace dart {
 namespace constraint {
@@ -137,14 +137,14 @@ double BalanceConstraint::eval(const Eigen::VectorXd& _x)
 
     if(!zeroError)
     {
-      size_t closestIndex1, closestIndex2;
+      std::size_t closestIndex1, closestIndex2;
       const Eigen::Vector2d closestPoint =
           math::computeClosestPointOnSupportPolygon(
             closestIndex1, closestIndex2, projected_com, polygon);
 
       // Save the indices of the EndEffectors that are closest to the center of
       // mass
-      const std::vector<size_t>& indexMap = skel->getSupportIndices();
+      const std::vector<std::size_t>& indexMap = skel->getSupportIndices();
       mClosestEndEffector[0] = indexMap[closestIndex1];
       mClosestEndEffector[1] = indexMap[closestIndex2];
 
@@ -191,7 +191,7 @@ void BalanceConstraint::evalGradient(const Eigen::VectorXd& _x,
   // If eval(_x) was non-zero, then the IK and Skeleton should still exist, so
   // we shouldn't need to test their existance.
   const dynamics::SkeletonPtr& skel = mIK.lock()->getSkeleton();
-  const size_t nDofs = skel->getNumDofs();
+  const std::size_t nDofs = skel->getNumDofs();
 
   if(SHIFT_COM == mBalanceMethod)
   {
@@ -200,9 +200,9 @@ void BalanceConstraint::evalGradient(const Eigen::VectorXd& _x,
     // locations
 
     mNullSpaceCache.setIdentity(nDofs, nDofs);
-    size_t numEE = skel->getNumEndEffectors();
+    std::size_t numEE = skel->getNumEndEffectors();
     // Build up the null space of the supporting end effectors
-    for(size_t i=0; i < numEE; ++i)
+    for(std::size_t i=0; i < numEE; ++i)
     {
       const dynamics::EndEffector* ee = skel->getEndEffector(i);
 
@@ -255,11 +255,11 @@ void BalanceConstraint::evalGradient(const Eigen::VectorXd& _x,
       }
       else
       {
-        mNullSpaceCache.setZero();
+        mNullSpaceCache.setZero(nDofs, nDofs);
       }
 
-      size_t numEE = skel->getNumEndEffectors();
-      for(size_t i=0; i < numEE; ++i)
+      std::size_t numEE = skel->getNumEndEffectors();
+      for(std::size_t i=0; i < numEE; ++i)
       {
         const dynamics::EndEffector* ee = skel->getEndEffector(i);
 
@@ -292,10 +292,10 @@ void BalanceConstraint::evalGradient(const Eigen::VectorXd& _x,
       }
       else
       {
-        mNullSpaceCache.setZero();
+        mNullSpaceCache.setZero(nDofs, nDofs);
       }
 
-      for(size_t i=0; i<2; ++i)
+      for(std::size_t i=0; i<2; ++i)
       {
         const dynamics::EndEffector* ee =
             skel->getEndEffector(mClosestEndEffector[i]);
@@ -321,6 +321,8 @@ void BalanceConstraint::evalGradient(const Eigen::VectorXd& _x,
       }
     }
   }
+
+  convertJacobianMethodOutputToGradient(_grad);
 }
 
 //==============================================================================
@@ -398,6 +400,26 @@ void BalanceConstraint::clearCaches()
 {
   // This will ensure that the comparison test in eval() fails
   mLastCOM = Eigen::Vector3d::Constant(std::nan(""));
+}
+
+//==============================================================================
+void BalanceConstraint::convertJacobianMethodOutputToGradient(
+    Eigen::Map<Eigen::VectorXd>& grad)
+{
+  const dart::dynamics::SkeletonPtr& skel = mIK.lock()->getSkeleton();
+  skel->setVelocities(grad);
+
+  mInitialPositionsCache = skel->getPositions();
+
+  for(std::size_t i=0; i < skel->getNumJoints(); ++i)
+    skel->getJoint(i)->integratePositions(1.0);
+
+  // Clear out the velocities so we don't interfere with other Jacobian methods
+  for(std::size_t i=0; i < skel->getNumDofs(); ++i)
+    skel->setVelocity(i, 0.0);
+
+  grad = skel->getPositions();
+  grad -= mInitialPositionsCache;
 }
 
 } // namespace constraint

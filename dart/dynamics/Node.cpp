@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Georgia Tech Research Corporation
+ * Copyright (c) 2015-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Michael X. Grey <mxgrey@gatech.edu>
@@ -34,8 +34,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/Node.h"
-#include "dart/dynamics/BodyNode.h"
+#include "dart/dynamics/Node.hpp"
+#include "dart/dynamics/BodyNode.hpp"
 
 #define REPORT_INVALID_NODE( func )                                          \
   dterr << "[Node::" #func "] This Node was not constructed correctly. It "  \
@@ -139,24 +139,6 @@ std::shared_ptr<const Skeleton> Node::getSkeleton() const
 }
 
 //==============================================================================
-size_t Node::incrementVersion()
-{
-  if(const SkeletonPtr& skel = getSkeleton())
-    return skel->incrementVersion();
-
-  return 0;
-}
-
-//==============================================================================
-size_t Node::getVersion() const
-{
-  if(const ConstSkeletonPtr& skel = getSkeleton())
-    return skel->getVersion();
-
-  return 0;
-}
-
-//==============================================================================
 std::shared_ptr<NodeDestructor> Node::getOrCreateDestructor()
 {
   std::shared_ptr<NodeDestructor> destructor = mDestructor.lock();
@@ -182,6 +164,9 @@ Node::Node(BodyNode* _bn)
     REPORT_INVALID_NODE(Node);
     return;
   }
+
+  if(mBodyNode != this)
+    setVersionDependentObject(mBodyNode);
 }
 
 //==============================================================================
@@ -295,7 +280,7 @@ void Node::stageForRemoval()
   destructors.erase(destructor_iter);
 
   // Reset all the Node indices that have been altered
-  for(size_t i=mIndexInBodyNode; i < nodes.size(); ++i)
+  for(std::size_t i=mIndexInBodyNode; i < nodes.size(); ++i)
     nodes[i]->mIndexInBodyNode = i;
 
   assert(std::find(nodes.begin(), nodes.end(), this) == nodes.end());

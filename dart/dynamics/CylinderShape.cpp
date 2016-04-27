@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Tobias Kunz <tobias@gatech.edu>
@@ -34,8 +34,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "dart/dynamics/CylinderShape.hpp"
+
 #include <cmath>
-#include "dart/dynamics/CylinderShape.h"
+#include "dart/math/Helpers.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -75,7 +77,7 @@ void CylinderShape::setHeight(double _height) {
 //==============================================================================
 double CylinderShape::computeVolume(double radius, double height)
 {
-  return DART_PI * std::pow(radius, 2) * height;
+  return math::constantsd::pi() * std::pow(radius, 2) * height;
 }
 
 //==============================================================================

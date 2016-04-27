@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -34,12 +34,12 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/SoftMeshShape.h"
+#include "dart/dynamics/SoftMeshShape.hpp"
 
-#include "dart/common/Console.h"
+#include "dart/common/Console.hpp"
 
-#include "dart/dynamics/PointMass.h"
-#include "dart/dynamics/SoftBodyNode.h"
+#include "dart/dynamics/PointMass.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -58,12 +58,12 @@ SoftMeshShape::SoftMeshShape(SoftBodyNode* _softBodyNode)
 
 SoftMeshShape::~SoftMeshShape()
 {
-  delete mAssimpMesh;
+  // Do nothing
 }
 
 const aiMesh* SoftMeshShape::getAssimpMesh() const
 {
-  return mAssimpMesh;
+  return mAssimpMesh.get();
 }
 
 const SoftBodyNode* SoftMeshShape::getSoftBodyNode() const
@@ -91,7 +91,7 @@ void SoftMeshShape::_buildMesh()
   int nFaces    = mSoftBodyNode->getNumFaces();
 
   // Create new aiMesh
-  mAssimpMesh = new aiMesh();
+  mAssimpMesh = common::make_unique<aiMesh>();
 
   // Set vertices and normals
   mAssimpMesh->mNumVertices = nVertices;
@@ -124,10 +124,10 @@ void SoftMeshShape::_buildMesh()
 
 void SoftMeshShape::update()
 {
-  size_t nVertices = mSoftBodyNode->getNumPointMasses();
+  std::size_t nVertices = mSoftBodyNode->getNumPointMasses();
 
   aiVector3D itAIVector3d;
-  for (size_t i = 0; i < nVertices; ++i)
+  for (std::size_t i = 0; i < nVertices; ++i)
   {
     PointMass* itPointMass        = mSoftBodyNode->getPointMass(i);
     const Eigen::Vector3d& vertex = itPointMass->getLocalPosition();

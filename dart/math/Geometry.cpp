@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Sehoon Ha <sehoon.ha@gmail.com>,
@@ -35,6 +35,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "dart/math/Geometry.hpp"
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -42,9 +44,10 @@
 #include <iostream>
 #include <vector>
 
-#include "dart/common/Console.h"
-#include "dart/math/Geometry.h"
-#include "dart/math/Helpers.h"
+#include "dart/common/Console.hpp"
+#include "dart/math/Helpers.hpp"
+
+#define DART_EPSILON 1e-6
 
 namespace dart {
 namespace math {
@@ -88,7 +91,7 @@ Eigen::Vector3d matrixToEulerXYX(const Eigen::Matrix3d& _R) {
       return Eigen::Vector3d(x0, y, x1);
     } else {
       // Not a unique solution:  x1_angle - x0_angle = atan2(-r12,r11)
-      double y  = DART_PI;
+      double y  = constantsd::pi();
       double x0 = -atan2(-_R(1, 2), _R(1, 1));
       double x1 = 0.0;
       // return EA_NOT_UNIQUE_DIF;
@@ -115,14 +118,14 @@ Eigen::Vector3d matrixToEulerXYZ(const Eigen::Matrix3d& _R) {
 
   if (_R(0, 2) > (1.0-DART_EPSILON)) {
     z = atan2(_R(1, 0), _R(1, 1));
-    y = DART_PI_HALF;
+    y = constantsd::half_pi();
     x = 0.0;
     return Eigen::Vector3d(x, y, z);
   }
 
   if (_R(0, 2) < -(1.0-DART_EPSILON)) {
     z = atan2(_R(1, 0), _R(1, 1));
-    y = -DART_PI_HALF;
+    y = -constantsd::half_pi();
     x = 0.0;
     return Eigen::Vector3d(x, y, z);
   }
@@ -140,14 +143,14 @@ Eigen::Vector3d matrixToEulerZYX(const Eigen::Matrix3d& _R) {
 
   if (_R(2, 0) > (1.0-DART_EPSILON)) {
     x = atan2(_R(0, 1), _R(0, 2));
-    y = -DART_PI_HALF;
+    y = -constantsd::half_pi();
     z = 0.0;
     return Eigen::Vector3d(z, y, x);
   }
 
   if (_R(2, 0) < -(1.0-DART_EPSILON)) {
     x = atan2(_R(0, 1), _R(0, 2));
-    y = DART_PI_HALF;
+    y = constantsd::half_pi();
     z = 0.0;
     return Eigen::Vector3d(z, y, x);
   }
@@ -165,14 +168,14 @@ Eigen::Vector3d matrixToEulerXZY(const Eigen::Matrix3d& _R) {
 
   if (_R(0, 1) > (1.0-DART_EPSILON)) {
     y = atan2(_R(1, 2), _R(1, 0));
-    z = -DART_PI_HALF;
+    z = -constantsd::half_pi();
     x = 0.0;
     return Eigen::Vector3d(x, z, y);
   }
 
   if (_R(0, 1) < -(1.0-DART_EPSILON)) {
     y = atan2(_R(1, 2), _R(1, 0));
-    z = DART_PI_HALF;
+    z = constantsd::half_pi();
     x = 0.0;
     return Eigen::Vector3d(x, z, y);
   }
@@ -190,14 +193,14 @@ Eigen::Vector3d matrixToEulerYZX(const Eigen::Matrix3d& _R) {
 
   if (_R(1, 0) > (1.0 - DART_EPSILON)) {
     x = -atan2(_R(0, 2), _R(0, 1));
-    z = DART_PI_HALF;
+    z = constantsd::half_pi();
     y = 0.0;
     return Eigen::Vector3d(y, z, x);
   }
 
   if (_R(1, 0) < -(1.0 - DART_EPSILON)) {
     x = -atan2(_R(0, 2), _R(0, 1));
-    z = -DART_PI_HALF;
+    z = -constantsd::half_pi();
     y = 0.0;
     return Eigen::Vector3d(y, z, x);
   }
@@ -215,14 +218,14 @@ Eigen::Vector3d matrixToEulerZXY(const Eigen::Matrix3d& _R) {
 
   if (_R(2, 1) > (1.0-DART_EPSILON)) {
     y = atan2(_R(0, 2), _R(0, 0));
-    x = DART_PI_HALF;
+    x = constantsd::half_pi();
     z = 0.0;
     return Eigen::Vector3d(z, x, y);
   }
 
   if (_R(2, 1) < -(1.0-DART_EPSILON)) {
     y = atan2(_R(0, 2), _R(0, 0));
-    x = -DART_PI_HALF;
+    x = -constantsd::half_pi();
     z = 0.0;
     return Eigen::Vector3d(z, x, y);
   }
@@ -240,14 +243,14 @@ Eigen::Vector3d matrixToEulerYXZ(const Eigen::Matrix3d& _R) {
 
   if (_R(1, 2) > (1.0-DART_EPSILON)) {
     z = -atan2(_R(0, 1), _R(0, 0));
-    x = -DART_PI_HALF;
+    x = -constantsd::half_pi();
     y = 0.0;
     return Eigen::Vector3d(y, x, z);
   }
 
   if (_R(1, 2) < -(1.0-DART_EPSILON)) {
     z = -atan2(_R(0, 1), _R(0, 0));
-    x = DART_PI_HALF;
+    x = constantsd::half_pi();
     y = 0.0;
     return Eigen::Vector3d(y, x, z);
   }
@@ -525,8 +528,8 @@ Eigen::Vector3d logMap(const Eigen::Matrix3d& _R) {
 //        std::max(
 //          std::min(0.5 * (_R(0, 0) + _R(1, 1) + _R(2, 2) - 1.0), 1.0), -1.0));
 
-//  if (theta > DART_PI - DART_EPSILON) {
-//    double delta = 0.5 + 0.125*(DART_PI - theta)*(DART_PI - theta);
+//  if (theta > constantsd::pi() - DART_EPSILON) {
+//    double delta = 0.5 + 0.125*(constantsd::pi() - theta)*(constantsd::pi() - theta);
 
 //    return Eigen::Vector3d(
 //          _R(2, 1) > _R(1, 2) ? theta*sqrt(1.0 + (_R(0, 0) - 1.0)*delta) :
@@ -541,7 +544,7 @@ Eigen::Vector3d logMap(const Eigen::Matrix3d& _R) {
 //    if (theta > DART_EPSILON)
 //      alpha = 0.5*theta / sin(theta);
 //    else
-//      alpha = 0.5 + DART_1_12*theta*theta;
+//      alpha = 0.5 + constantsd::one_div_12()*theta*theta;
 
 //    return Eigen::Vector3d(alpha*(_R(2, 1) - _R(1, 2)),
 //                           alpha*(_R(0, 2) - _R(2, 0)),
@@ -566,12 +569,12 @@ Eigen::Vector6d logMap(const Eigen::Isometry3d& _T) {
   double gamma;
   Eigen::Vector6d ret;
 
-  if (theta > DART_PI - DART_EPSILON) {
+  if (theta > constantsd::pi() - DART_EPSILON) {
     const double c1 = 0.10132118364234;  // 1 / pi^2
     const double c2 = 0.01507440267955;  // 1 / 4 / pi - 2 / pi^3
     const double c3 = 0.00546765085347;  // 3 / pi^4 - 1 / 4 / pi^2
 
-    double phi = DART_PI - theta;
+    double phi = constantsd::pi() - theta;
     double delta = 0.5 + 0.125*phi*phi;
 
     double w[] = { _T(2, 1) > _T(1, 2)
@@ -584,7 +587,7 @@ Eigen::Vector6d logMap(const Eigen::Isometry3d& _T) {
                    ? theta*sqrt(1.0 + (_T(2, 2) - 1.0)*delta)
                    : -theta*sqrt(1.0 + (_T(2, 2) - 1.0)*delta) };
 
-    beta = 0.25*theta*(DART_PI - theta);
+    beta = 0.25*theta*(constantsd::pi() - theta);
     gamma = (w[0]*_T(0, 3) + w[1]*_T(1, 3) + w[2]*_T(2, 3))
             * (c1 -  c2*phi + c3*phi*phi);
 
@@ -601,9 +604,9 @@ Eigen::Vector6d logMap(const Eigen::Isometry3d& _T) {
       beta = (1.0 + cos(theta))*alpha;
       gamma = (1.0 - beta) / theta / theta;
     } else {
-      alpha = 0.5 + DART_1_12*theta*theta;
-      beta = 1.0 - DART_1_12*theta*theta;
-      gamma = DART_1_12 + DART_1_720*theta*theta;
+      alpha = 0.5 + 1.0/12.0*theta*theta;
+      beta = 1.0 - 1.0/12.0*theta*theta;
+      gamma = 1.0/12.0 + 1.0/720.0*theta*theta;
     }
 
     double w[] = { alpha*(_T(2, 1) - _T(1, 2)),
@@ -1399,8 +1402,8 @@ Eigen::Matrix3d parallelAxisTheorem(const Eigen::Matrix3d& _original,
 {
   const Eigen::Vector3d& p = _comShift;
   Eigen::Matrix3d result(_original);
-  for(size_t i=0; i<3; ++i)
-    for(size_t j=0; j<3; ++j)
+  for(std::size_t i=0; i<3; ++i)
+    for(std::size_t j=0; j<3; ++j)
       result(i,j) += _mass * ( delta(i,j)*p.dot(p) - p(i)*p(j) );
 
   return result;
@@ -1502,13 +1505,13 @@ SupportPolygon computeSupportPolgyon(const SupportGeometry& _geometry,
                                      const Eigen::Vector3d& _axis1,
                                      const Eigen::Vector3d& _axis2)
 {
-  std::vector<size_t> indices;
+  std::vector<std::size_t> indices;
   indices.reserve(_geometry.size());
   return computeSupportPolgyon(indices, _geometry, _axis1, _axis2);
 }
 
 //==============================================================================
-SupportPolygon computeSupportPolgyon(std::vector<size_t>& _originalIndices,
+SupportPolygon computeSupportPolgyon(std::vector<std::size_t>& _originalIndices,
                                      const SupportGeometry& _geometry,
                                      const Eigen::Vector3d& _axis1,
                                      const Eigen::Vector3d& _axis2)
@@ -1526,7 +1529,7 @@ SupportPolygon computeSupportPolgyon(std::vector<size_t>& _originalIndices,
 // convex hulls
 struct HullAngle
 {
-  HullAngle(double angle, double distance, size_t index)
+  HullAngle(double angle, double distance, std::size_t index)
     : mAngle(angle),
       mDistance(distance),
       mIndex(index)
@@ -1536,7 +1539,7 @@ struct HullAngle
 
   double mAngle;
   double mDistance;
-  size_t mIndex;
+  std::size_t mIndex;
 };
 
 //==============================================================================
@@ -1549,7 +1552,7 @@ static bool HullAngleComparison(const HullAngle& a, const HullAngle& b)
 //==============================================================================
 SupportPolygon computeConvexHull(const SupportPolygon& _points)
 {
-  std::vector<size_t> indices;
+  std::vector<std::size_t> indices;
   indices.reserve(_points.size());
   return computeConvexHull(indices, _points);
 }
@@ -1577,7 +1580,7 @@ Eigen::Vector2d computeCentroidOfHull(const SupportPolygon& _convexHull)
   double area_i;
   Eigen::Vector2d midp12, midp01;
 
-  for(size_t i=2; i < _convexHull.size(); ++i)
+  for(std::size_t i=2; i < _convexHull.size(); ++i)
   {
     const Eigen::Vector2d& p0 = _convexHull[0];
     const Eigen::Vector2d& p1 = _convexHull[i-1];
@@ -1588,7 +1591,7 @@ Eigen::Vector2d computeCentroidOfHull(const SupportPolygon& _convexHull)
     midp12 = 0.5 * (p1+p2);
     midp01 = 0.5 * (p0+p1);
 
-    Intersection_t result =
+    IntersectionResult result =
         computeIntersection(intersect, p0, midp12, p2, midp01);
 
     if(BEYOND_ENDPOINTS == result)
@@ -1632,7 +1635,7 @@ static bool isLeftTurn(const Eigen::Vector2d& p1,
 }
 
 //==============================================================================
-SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
+SupportPolygon computeConvexHull(std::vector<std::size_t>& _originalIndices,
                                  const SupportPolygon& _points)
 {
   _originalIndices.clear();
@@ -1640,16 +1643,16 @@ SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
   if(_points.size() <= 3)
   {
     // Three or fewer points is already a convex hull
-    for(size_t i=0; i < _points.size(); ++i)
+    for(std::size_t i=0; i < _points.size(); ++i)
       _originalIndices.push_back(i);
 
     return _points;
   }
 
   // We'll use "Graham scan" to compute the convex hull in the general case
-  size_t lowestIndex = static_cast<size_t>(-1);
+  std::size_t lowestIndex = static_cast<std::size_t>(-1);
   double lowestY = std::numeric_limits<double>::infinity();
-  for(size_t i=0; i < _points.size(); ++i)
+  for(std::size_t i=0; i < _points.size(); ++i)
   {
     if(_points[i][1] < lowestY)
     {
@@ -1667,7 +1670,7 @@ SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
 
   std::vector<HullAngle> angles;
   const Eigen::Vector2d& bottom = _points[lowestIndex];
-  for(size_t i=0; i < _points.size(); ++i)
+  for(std::size_t i=0; i < _points.size(); ++i)
   {
     const Eigen::Vector2d& p = _points[i];
     if( p != bottom )
@@ -1681,13 +1684,13 @@ SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
 
   if(angles.size() > 1)
   {
-    for(size_t i=0; i<angles.size()-1; ++i)
+    for(std::size_t i=0; i<angles.size()-1; ++i)
     {
       if( std::abs(angles[i].mAngle - angles[i+1].mAngle) < 1e-12 )
       {
         // If two points have the same angle, throw out the one that is closer
         // to the corner
-        size_t tossout = (angles[i].mDistance < angles[i+1].mDistance)? i : i+1;
+        std::size_t tossout = (angles[i].mDistance < angles[i+1].mDistance)? i : i+1;
         angles.erase(angles.begin()+tossout);
         --i;
       }
@@ -1700,27 +1703,27 @@ SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
     // three or fewer unique points
     _originalIndices.reserve(angles.size()+1);
     _originalIndices.push_back(lowestIndex);
-    for(size_t i=0; i < angles.size(); ++i)
+    for(std::size_t i=0; i < angles.size(); ++i)
       _originalIndices.push_back(angles[i].mIndex);
 
     SupportPolygon polygon;
     polygon.reserve(_originalIndices.size());
-    for(size_t index : _originalIndices)
+    for(std::size_t index : _originalIndices)
       polygon.push_back(_points[index]);
 
     return polygon;
   }
 
-  std::vector<size_t>& edge = _originalIndices;
-  size_t lastIndex = lowestIndex;
-  size_t secondToLastIndex = angles[0].mIndex;
+  std::vector<std::size_t>& edge = _originalIndices;
+  std::size_t lastIndex = lowestIndex;
+  std::size_t secondToLastIndex = angles[0].mIndex;
   edge.reserve(angles.size()+1);
 
   edge.push_back(lowestIndex);
 
-  for(size_t i=1; i < angles.size(); ++i)
+  for(std::size_t i=1; i < angles.size(); ++i)
   {
-    size_t currentIndex = angles[i].mIndex;
+    std::size_t currentIndex = angles[i].mIndex;
     const Eigen::Vector2d& p1 = _points[lastIndex];
     const Eigen::Vector2d& p2 = _points[secondToLastIndex];
     const Eigen::Vector2d& p3 = _points[currentIndex];
@@ -1750,7 +1753,7 @@ SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
 
   SupportPolygon polygon;
   polygon.reserve(edge.size());
-  for(size_t index : edge)
+  for(std::size_t index : edge)
     polygon.push_back(_points[index]);
 
   // Note that we do not need to fill in _originalIndices, because "edge" is a
@@ -1760,7 +1763,7 @@ SupportPolygon computeConvexHull(std::vector<size_t>& _originalIndices,
 }
 
 //==============================================================================
-Intersection_t computeIntersection(Eigen::Vector2d& _intersectionPoint,
+IntersectionResult computeIntersection(Eigen::Vector2d& _intersectionPoint,
                                    const Eigen::Vector2d& a1,
                                    const Eigen::Vector2d& a2,
                                    const Eigen::Vector2d& b1,
@@ -1789,7 +1792,7 @@ Intersection_t computeIntersection(Eigen::Vector2d& _intersectionPoint,
   else
     point[1] = dy_b/dx_b*(point[0]-b1[0]) + b1[1];
 
-  for(size_t i=0; i < 2; ++i)
+  for(std::size_t i=0; i < 2; ++i)
   {
     if( (point[i] < std::min(a1[i], a2[i]))
         || (std::max(a1[i], a2[i]) < point[i]) )
@@ -1849,7 +1852,7 @@ bool isInsideSupportPolygon(const Eigen::Vector2d& _p,
     return false;
   }
 
-  for(size_t i=0; i < _support.size(); ++i)
+  for(std::size_t i=0; i < _support.size(); ++i)
   {
     const Eigen::Vector2d& p1 = (i==0)? _support.back() : _support[i-1];
     const Eigen::Vector2d& p2 = _support[i];
@@ -1923,19 +1926,19 @@ Eigen::Vector2d computeClosestPointOnLineSegment(const Eigen::Vector2d& _p,
 Eigen::Vector2d computeClosestPointOnSupportPolygon(const Eigen::Vector2d& _p,
                                              const SupportPolygon& _support)
 {
-  size_t _index1;
-  size_t _index2;
+  std::size_t _index1;
+  std::size_t _index2;
   return computeClosestPointOnSupportPolygon(_index1, _index2, _p, _support);
 }
 
 //==============================================================================
-Eigen::Vector2d computeClosestPointOnSupportPolygon(size_t& _index1, size_t& _index2,
+Eigen::Vector2d computeClosestPointOnSupportPolygon(std::size_t& _index1, std::size_t& _index2,
                                              const Eigen::Vector2d& _p,
                                              const SupportPolygon& _support)
 {
   if(_support.size() == 0)
   {
-    _index1 = static_cast<size_t>(-1);
+    _index1 = static_cast<std::size_t>(-1);
     _index2 = _index1;
     return _p;
   }
@@ -1956,7 +1959,7 @@ Eigen::Vector2d computeClosestPointOnSupportPolygon(size_t& _index1, size_t& _in
 
   double best = std::numeric_limits<double>::infinity(), check;
   Eigen::Vector2d test, result;
-  for(size_t i=0; i < _support.size(); ++i)
+  for(std::size_t i=0; i < _support.size(); ++i)
   {
     const Eigen::Vector2d& p1 = (i==0)? _support.back() : _support[i-1];
     const Eigen::Vector2d& p2 = _support[i];

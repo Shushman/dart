@@ -43,12 +43,12 @@ endif()
 
 project(dart)
 
-set(DART_MAJOR_VERSION "5")
-set(DART_MINOR_VERSION "1")
-set(DART_PATCH_VERSION "1")
+set(DART_MAJOR_VERSION "6")
+set(DART_MINOR_VERSION "0")
+set(DART_PATCH_VERSION "0")
 set(DART_VERSION "${DART_MAJOR_VERSION}.${DART_MINOR_VERSION}.${DART_PATCH_VERSION}")
 set(DART_PKG_DESC "Dynamic Animation and Robotics Toolkit.")
-set(DART_PKG_EXTERNAL_DEPS "flann, ccd, fcl")
+set(DART_PKG_EXTERNAL_DEPS "eigen, ccd, fcl, assimp, boost")
 
 #===============================================================================
 # Print intro
@@ -62,7 +62,6 @@ message(STATUS "============================================")
 # Build options
 #===============================================================================
 option(ENABLE_OPENMP "Build with OpenMP parallaization enabled" ON)
-option(BUILD_CORE_ONLY "Build only the core of DART" OFF)
 if(MSVC)
   set(DART_RUNTIME_LIBRARY "/MD" CACHE STRING "BaseName chosen by the user at CMake configure time")
   set_property(CACHE DART_RUNTIME_LIBRARY PROPERTY STRINGS /MD /MT)
@@ -70,9 +69,10 @@ if(MSVC)
 else()
   option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 endif()
-option(DART_BUILD_OSGDART "Build osgDart library" ON)
+option(DART_BUILD_GUI_OSG "Build osgDart library" ON)
 option(DART_COVERALLS "Turn on coveralls support" OFF)
 option(DART_COVERALLS_UPLOAD "Upload the generated coveralls json" ON)
+option(DART_TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 
 if(DART_COVERALLS)
   include(Coveralls)
@@ -107,288 +107,7 @@ endif()
 #===============================================================================
 # Find dependencies
 #===============================================================================
-#
-# If you add a dependency, please add the corresponding rosdep key as a
-# dependency in package.xml.
-
-#------------------------
-# Mandatory dependencies
-#------------------------
-message(STATUS "")
-message(STATUS "[ Mandatory dependencies ]")
-
-# Eigen
-find_package(EIGEN3 3.0.5 QUIET)
-if(EIGEN3_FOUND)
-  message(STATUS "Looking for EIGEN3 - ${EIGEN3_VERSION} found")
-else()
-  message(SEND_ERROR "Looking for EIGEN3 - NOT found, please install libeigen3-dev (>= 3.0.5)")
-endif()
-
-# CCD
-find_package(CCD 1.4.0 QUIET)
-if(CCD_FOUND)
-  message(STATUS "Looking for CCD - ${CCD_VERSION} found")
-else()
-  message(SEND_ERROR "Looking for CCD - NOT found, please install libccd-dev (>= 1.4.0)")
-endif()
-
-# FCL
-# TODO: We need to increate the minimum required fcl version to 0.4.0 for DART
-# 5.0 once fcl 0.4.0 is released.
-find_package(FCL 0.2.9 QUIET)
-if(FCL_FOUND)
-  message(STATUS "Looking for FCL - ${FCL_VERSION} found")
-  if(FCL_VERSION)
-    if("${FCL_VERSION}" VERSION_LESS "0.4.0")
-      message(WARNING
-        "Found FCL version ${FCL_VERSION}, which is older than 0.4.0. FCL"
-        " versions predating 0.4.0 return incorrect contacts for"
-        " primitive-primitive collsions. You should use FCLMeshCollisionDetector"
-        " instead of FCLCollisionDetector if you need accurate contacts."
-      )
-      set(DART_USE_FCLMESHCOLLISIONDETECTOR TRUE)
-    else()
-      set(DART_USE_FCLMESHCOLLISIONDETECTOR FALSE)
-    endif()
-  endif()
-else()
-  message(SEND_ERROR "Looking for FCL - NOT found, please install libfcl-dev (>= 0.2.9)")
-endif()
-
-# ASSIMP
-find_package(ASSIMP 3.0.0 QUIET)
-if(ASSIMP_FOUND)
-  message(STATUS "Looking for ASSIMP - ${ASSIMP_VERSION} found")
-
-  # Check for missing symbols in ASSIMP (see #451)
-  include(CheckCXXSourceCompiles)
-  set(CMAKE_REQUIRED_INCLUDES ${ASSIMP_INCLUDE_DIRS})
-  set(CMAKE_REQUIRED_LIBRARIES ${ASSIMP_LIBRARIES})
-
-  check_cxx_source_compiles(
-  "
-  #include <assimp/scene.h>
-  int main()
-  {
-    aiScene* scene = new aiScene;
-    delete scene;
-    return 1;
-  }
-  "
-  ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
-
-  if(NOT ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
-    message(WARNING "The installed version of ASSIMP (${ASSIMP_VERSION}) is "
-                    "missing symbols for the constructor and/or destructor of "
-                    "aiScene. DART will use its own implementations of these "
-                    "functions. We recommend using a version of ASSIMP that "
-                    "does not have this issue, once one becomes available.")
-  endif(NOT ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
-
-  check_cxx_source_compiles(
-  "
-  #include <assimp/material.h>
-  int main()
-  {
-    aiMaterial* material = new aiMaterial;
-    delete material;
-    return 1;
-  }
-  "
-  ASSIMP_AIMATERIAL_CTOR_DTOR_DEFINED)
-
-  if(NOT ASSIMP_AIMATERIAL_CTOR_DTOR_DEFINED)
-    message(WARNING "The installed version of ASSIMP (${ASSIMP_VERSION}) is "
-                    "missing symbols for the constructor and/or destructor of "
-                    "aiMaterial. DART will use its own implementations of "
-                    "these functions. We recommend using a version of ASSIMP "
-                    "that does not have this issue, once one becomes available.")
-  endif(NOT ASSIMP_AIMATERIAL_CTOR_DTOR_DEFINED)
-
-  unset(CMAKE_REQUIRED_INCLUDES)
-  unset(CMAKE_REQUIRED_LIBRARIES)
-
-else()
-  message(SEND_ERROR "Looking for ASSIMP - NOT found, please install libassimp-dev (>= 3.0.0)")
-endif()
-
-# OpenGL
-find_package(OpenGL QUIET)
-if(OPENGL_FOUND)
-  message(STATUS "Looking for OpenGL - found")
-else()
-  message(SEND_ERROR "Looking for OpenGL - NOT found, please install OpenGL")
-endif()
-
-# Boost
-set(DART_MIN_BOOST_VERSION 1.46.0 CACHE INTERNAL "Boost min version requirement" FORCE)
-if(MSVC)
-  add_definitions(-DBOOST_ALL_NO_LIB)
-endif()
-add_definitions(-DBOOST_TEST_DYN_LINK)
-set(Boost_USE_MULTITHREADED ON)
-set(Boost_USE_STATIC_RUNTIME OFF)
-find_package(Boost ${DART_MIN_BOOST_VERSION} COMPONENTS regex system QUIET)
-if(Boost_FOUND)
-  message(STATUS "Looking for Boost - ${Boost_MAJOR_VERSION}.${Boost_MINOR_VERSION}.${Boost_SUBMINOR_VERSION} found")
-else()
-  message(SEND_ERROR "Please install system boost version ${DART_MIN_BOOST_VERSION} or higher.")
-endif()
-
-if(NOT BUILD_CORE_ONLY)
-
-  # GLUT
-  if(WIN32 AND NOT CYGWIN)
-    set(GLUT_INCLUDE_DIR "@CMAKE_INSTALL_PREFIX@/include")
-    set(GLUT_LIBRARIES glut32)
-  else()
-    find_package(GLUT QUIET)
-    if(GLUT_FOUND)
-      message(STATUS "Looking for GLUT - found")
-      set(GLUT_LIBRARIES ${GLUT_glut_LIBRARY})
-    else()
-      message(SEND_ERROR "Looking for GLUT - NOT found, Please install freeglut3-dev")
-    endif()
-  endif()
-
-  # FLANN
-  find_package(FLANN 1.8.4 QUIET)
-  if(FLANN_FOUND)
-    message(STATUS "Looking for FLANN - ${FLANN_VERSION} found")
-  else()
-    message(SEND_ERROR "Looking for FLANN - NOT found, please install libflann-dev (>= 1.8.4)")
-  endif()
-
-  # TINYXML
-  find_package(TINYXML 2.6.2 QUIET)
-  if(TINYXML_FOUND)
-    message(STATUS "Looking for TINYXML - ${TINYXML_VERSION} found")
-  else()
-    message(SEND_ERROR "Looking for TINYXML - NOT found, please install libtinyxml-dev (>= 2.6.2)")
-  endif()
-
-  # TINYXML2
-  find_package(TINYXML2 QUIET)
-  if(TINYXML2_FOUND)
-    message(STATUS "Looking for TINYXML2 - ${TINYXML2_VERSION} found")
-  else()
-    message(SEND_ERROR "Looking for TINYXML2 - NOT found, please install libtinyxml2-dev (>= 1.0.1)")
-  endif()
-
-  # urdfdom
-  find_package(urdfdom QUIET)
-  if(urdfdom_FOUND)
-    message(STATUS "Looking for urdfdom - found")
-  else()
-    message(SEND_ERROR "Looking for urdfdom - NOT found, please install liburdfdom-dev")
-  endif()
-  if(MSVC)
-    set(urdfdom_LIBRARIES optimized urdfdom_sensor      debug urdfdom_sensord
-                          optimized urdfdom_model_state debug urdfdom_model_stated
-                          optimized urdfdom_model       debug urdfdom_modeld
-                          optimized urdfdom_world       debug urdfdom_worldd
-                          optimized console_bridge      debug console_bridged)
-  endif()
-
-endif()
-
-#-----------------------
-# Optional dependencies
-#-----------------------
-message(STATUS "")
-message(STATUS "[ Optional dependencies ]")
-
-# OpenMP
-if(ENABLE_OPENMP)
-  find_package(OpenMP QUIET)
-  if(OPENMP_FOUND)
-    message(STATUS "Looking for OpenMP - found")
-  else()
-    message(STATUS "Looking for OpenMP - NOT found")
-  endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
-
-# NLOPT
-find_package(NLOPT 2.4.1 QUIET)
-if(NLOPT_FOUND)
-  message(STATUS "Looking for NLOPT - ${NLOPT_VERSION} found")
-  set(HAVE_NLOPT TRUE)
-else()
-  message(STATUS "Looking for NLOPT - NOT found, please install libnlopt-dev (>= 2.4.1)")
-  set(HAVE_NLOPT FALSE)
-endif()
-
-# IPOPT
-find_package(IPOPT 3.11.4 QUIET)
-if(IPOPT_FOUND)
-  message(STATUS "Looking for IPOPT - ${IPOPT_VERSION} found")
-  set(HAVE_IPOPT TRUE)
-else()
-  message(STATUS "Looking for IPOPT - NOT found, please install coinor-libipopt-dev (>= 3.11.4)")
-  set(HAVE_IPOPT FALSE)
-endif()
-
-# Shark
-find_package(SHARK QUIET)
-if(SHARK_FOUND)
-  message(STATUS "Looking for SHARK - ${SHARK_VERSION} found")
-  set(HAVE_SHARK TRUE)
-else()
-  message(STATUS "Looking for SHARK - NOT found, please install SHARK (http://image.diku.dk/shark)")
-  set(HAVE_SHARK FALSE)
-endif()
-
-# BulletCollision
-find_package(Bullet COMPONENTS BulletMath BulletCollision QUIET)
-
-if(BULLET_FOUND)
-  message(STATUS "Looking for BulletCollision - ${BULLET_VERSION} found")
-  set(HAVE_BULLET_COLLISION TRUE)
-  add_definitions(-DHAVE_BULLET_COLLISION)
-else()
-  message(STATUS "Looking for BulletCollision - NOT found, please install libbullet-dev")
-  set(HAVE_BULLET_COLLISION FALSE)
-endif()
-
-# Perl modules
-find_package(PerlModules COMPONENTS Regexp::Common Getopt::ArgvFile Getopt::Long Term::ANSIColor QUIET)
-if("${PERLMODULES_FOUND}" STREQUAL "TRUE")
-  message(STATUS "Looking for PerlModules - found")
-else()
-  message(STATUS "Looking for PerlModules - NOT found, please install Regexp::Common Getopt::ArgvFile Getopt::Long Term::ANSIColor (http://www.cpan.org/modules/INSTALL.html)")
-endif()
-
-# Doxygen
-find_package(Doxygen QUIET)
-if(DOXYGEN_FOUND)
-  message(STATUS "Looking for Doxygen - found")
-else()
-  message(STATUS "Looking for Doxygen - NOT found, please install doxygen")
-endif()
-
-#===============================================================================
-# DART dependency variable settings
-#===============================================================================
-set(DART_CORE_DEPENDENCIES ${CCD_LIBRARIES}
-                           ${FCL_LIBRARIES}
-                           ${ASSIMP_LIBRARIES}
-                           ${Boost_LIBRARIES}
-                           ${OPENGL_LIBRARIES}
-                           ${GLUT_LIBRARY}
-)
-
-if(HAVE_BULLET_COLLISION)
-  set(DART_CORE_DEPENDENCIES ${DART_CORE_DEPENDENCIES} ${BULLET_LIBRARIES})
-endif()
-
-if(NOT BUILD_CORE_ONLY)
-  set(DART_DEPENDENCIES ${urdfdom_LIBRARIES}
-                        ${TINYXML_LIBRARIES}
-                        ${TINYXML2_LIBRARIES}
-  )
-endif()
+include(DARTFindDependencies)
 
 #===============================================================================
 # Include directories
@@ -399,39 +118,16 @@ include_directories(SYSTEM ${CCD_INCLUDE_DIRS})
 include_directories(SYSTEM ${FCL_INCLUDE_DIRS})
 include_directories(SYSTEM ${ASSIMP_INCLUDE_DIRS})
 include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
-include_directories(SYSTEM ${OPENGL_INCLUDE_DIR})
-include_directories(SYSTEM ${GLUT_INCLUDE_DIR})
 if(HAVE_BULLET_COLLISION)
   include_directories(SYSTEM ${BULLET_INCLUDE_DIRS})
-  add_definitions(${BULLET_CFLAGS})
 endif()
-
-if(NOT BUILD_CORE_ONLY)
-  include_directories(SYSTEM ${FLANN_INCLUDE_DIRS})
-  include_directories(SYSTEM ${urdfdom_INCLUDE_DIRS})
-  include_directories(SYSTEM ${TINYXML_INCLUDE_DIRS})
-  include_directories(SYSTEM ${TINYXML2_INCLUDE_DIRS})
-  if(HAVE_NLOPT)
-    include_directories(SYSTEM ${NLOPT_INCLUDE_DIRS})
-  endif()
-  if(HAVE_IPOPT)
-    include_directories(SYSTEM ${IPOPT_INCLUDE_DIRS})
-  endif()
-  if(HAVE_SHARK)
-    include_directories(SYSTEM ${SHARK_INCLUDE_DIRS})
-  endif()
-endif()
-
 include_directories("${CMAKE_BINARY_DIR}")
 
-#===============================================================================
-# Link directories
-#===============================================================================
-link_directories("${CMAKE_BINARY_DIR}/lib")
-link_directories("${CMAKE_INSTALL_PREFIX}/lib")
-link_directories(${Boost_LIBRARY_DIRS})
+set(DART_INCLUDE_DIRS
+    "${CMAKE_INSTALL_PREFIX}/include"
+    "${EIGEN3_INCLUDE_DIRS}")
 if(HAVE_BULLET_COLLISION)
-  link_directories("${BULLET_LIBRARY_DIRS}")
+  list(APPEND DART_INCLUDE_DIRS "${BULLET_INCLUDE_DIRS}")
 endif()
 
 #===============================================================================
@@ -453,6 +149,9 @@ if(MSVC)
   if(MSVC_VERSION VERSION_LESS 1900)
     message(FATAL_ERROR "${PROJECT_NAME} requires VS 2015 or greater.")
   endif()
+  if(DART_TREAT_WARNINGS_AS_ERRORS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
+  endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP4")
   set(CMAKE_EXE_LINKER_FLAGS_RELEASE "/LTCG /INCREMENTAL:NO")
   if(NOT DART_MSVC_DEFAULT_OPTIONS)
@@ -460,6 +159,9 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${DART_RUNTIME_LIBRARY} /Zi /GL /Gy /W1 /EHsc /arch:SSE2")
   endif(NOT DART_MSVC_DEFAULT_OPTIONS)
 elseif(CMAKE_COMPILER_IS_GNUCXX)
+  if(DART_TREAT_WARNINGS_AS_ERRORS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+  endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -msse2 -fPIC")
   execute_process(
     COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
@@ -474,6 +176,11 @@ elseif(CMAKE_COMPILER_IS_GNUCXX)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_DEBUG}")
   set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_DEBUG} -pg")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  if(DART_TREAT_WARNINGS_AS_ERRORS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
+    # Turn warning "deprecated-declarations" into an warning even if -Werror is
+    # specified until we abandon glut.
+  endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -fPIC")
   execute_process(
     COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE CLANG_VERSION)
@@ -505,8 +212,7 @@ message(STATUS "Compiler version : ${CXX_COMPILER_VERSION}")
 message(STATUS "Build type       : ${CMAKE_BUILD_TYPE}")
 message(STATUS "BUILD_SHARED_LIBS: ${BUILD_SHARED_LIBS}")
 message(STATUS "ENABLE_OPENMP    : ${ENABLE_OPENMP}")
-message(STATUS "Build core only  : ${BUILD_CORE_ONLY}")
-message(STATUS "Build osgDart    : ${DART_BUILD_OSGDART}")
+message(STATUS "Build gui::osg   : ${DART_BUILD_GUI_OSG}")
 message(STATUS "Install path     : ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "CXX_FLAGS        : ${CMAKE_CXX_FLAGS}")
 if(${CMAKE_BUILD_TYPE_UPPERCASE} STREQUAL "RELEASE")
@@ -529,30 +235,21 @@ message(STATUS "[ Configured files ]")
 
 # Generate the dart config file
 # Ref: http://www.vtk.org/Wiki/CMake:How_To_Write_Platform_Checks
-set(DART_CONFIG_IN ${CMAKE_SOURCE_DIR}/dart/config.h.in)
-set(DART_CONFIG_OUT ${CMAKE_BINARY_DIR}/dart/config.h)
+set(DART_CONFIG_IN ${CMAKE_SOURCE_DIR}/dart/config.hpp.in)
+set(DART_CONFIG_OUT ${CMAKE_BINARY_DIR}/dart/config.hpp)
 message(STATUS ${DART_CONFIG_OUT})
 configure_file(${DART_CONFIG_IN} ${DART_CONFIG_OUT} @ONLY)
 install(FILES ${DART_CONFIG_OUT} DESTINATION include/dart)
 
 # Generate the DART CMake Config and version files
 include(WriteBasicConfigVersionFile)
-set(DART_CORE_CONFIG_IN ${CMAKE_SOURCE_DIR}/cmake/DARTCoreConfig.cmake.in)
-set(DART_CORE_CONFIG_OUT ${CMAKE_BINARY_DIR}/cmake/DARTCoreConfig.cmake)
-message(STATUS ${DART_CORE_CONFIG_OUT})
+set(DART_CONFIG_IN ${CMAKE_SOURCE_DIR}/cmake/DARTConfig.cmake.in)
+set(DART_CONFIG_OUT ${CMAKE_BINARY_DIR}/cmake/DARTConfig.cmake)
+message(STATUS ${DART_CONFIG_OUT})
 message(STATUS ${CMAKE_BINARY_DIR}/cmake/DARTConfigVersion.cmake)
-configure_file(${DART_CORE_CONFIG_IN} ${DART_CORE_CONFIG_OUT} @ONLY)
-write_basic_config_version_file(cmake/DARTCoreConfigVersion.cmake VERSION ${DART_VERSION} COMPATIBILITY SameMajorVersion)
-install(FILES ${DART_CORE_CONFIG_OUT} ${CMAKE_BINARY_DIR}/cmake/DARTCoreConfigVersion.cmake DESTINATION share/dartcore)
-if(NOT BUILD_CORE_ONLY)
-  set(DART_CONFIG_IN ${CMAKE_SOURCE_DIR}/cmake/DARTConfig.cmake.in)
-  set(DART_CONFIG_OUT ${CMAKE_BINARY_DIR}/cmake/DARTConfig.cmake)
-  message(STATUS ${DART_CONFIG_OUT})
-  message(STATUS ${CMAKE_BINARY_DIR}/cmake/DARTConfigVersion.cmake)
-  configure_file(${DART_CONFIG_IN} ${DART_CONFIG_OUT} @ONLY)
-  write_basic_config_version_file(cmake/DARTConfigVersion.cmake VERSION ${DART_VERSION} COMPATIBILITY SameMajorVersion)
-  install(FILES ${DART_CONFIG_OUT} ${CMAKE_BINARY_DIR}/cmake/DARTConfigVersion.cmake DESTINATION share/dart)
-endif()
+configure_file(${DART_CONFIG_IN} ${DART_CONFIG_OUT} @ONLY)
+write_basic_config_version_file(cmake/DARTConfigVersion.cmake VERSION ${DART_VERSION} COMPATIBILITY SameMajorVersion)
+install(FILES ${DART_CONFIG_OUT} ${CMAKE_BINARY_DIR}/cmake/DARTConfigVersion.cmake DESTINATION share/dart)
 
 # Generate the DART pkg-config
 set(PC_CONFIG_IN ${CMAKE_SOURCE_DIR}/cmake/dart.pc.in)
@@ -589,36 +286,29 @@ endfunction(dart_add_unittest)
 #===============================================================================
 
 add_subdirectory(dart)
+add_subdirectory(examples EXCLUDE_FROM_ALL)
+add_subdirectory(tutorials EXCLUDE_FROM_ALL)
 
-if(NOT BUILD_CORE_ONLY)
-  if(DART_BUILD_OSGDART)
-    add_subdirectory(osgDart)
-  endif(DART_BUILD_OSGDART)
+# Add a "tutorials" target to build tutorials.
+get_property(tutorials GLOBAL PROPERTY DART_TUTORIALS)
+add_custom_target(tutorials DEPENDS ${tutorials})
 
-  add_subdirectory(apps EXCLUDE_FROM_ALL)
-  add_subdirectory(tutorials EXCLUDE_FROM_ALL)
+message(STATUS "")
+message(STATUS "[ Tutorials ]")
+foreach(tutorial ${tutorials})
+  message(STATUS "Adding tutorial: ${tutorial}")
+endforeach(tutorial ${tutorials})
 
-  # Add a "tutorials" target to build tutorials.
-  get_property(tutorials GLOBAL PROPERTY DART_TUTORIALS)
-  add_custom_target(tutorials DEPENDS ${tutorials})
+# Add an "examples" target to build examples.
+get_property(examples GLOBAL PROPERTY DART_EXAMPLES)
+add_custom_target(examples DEPENDS ${examples})
 
-  message(STATUS "")
-  message(STATUS "[ Tutorials ]")
-  foreach(tutorial ${tutorials})
-    message(STATUS "Adding tutorial: ${tutorial}")
-  endforeach(tutorial ${tutorials})
+message(STATUS "")
+message(STATUS "[ Examples ]")
 
-  # Add an "examples" target to build examples.
-  get_property(examples GLOBAL PROPERTY DART_EXAMPLES)
-  add_custom_target(examples DEPENDS ${examples})
-
-  message(STATUS "")
-  message(STATUS "[ Examples ]")
-
-  foreach(example ${examples})
-    message(STATUS "Adding example: ${example}")
-  endforeach(example ${examples})
-endif(NOT BUILD_CORE_ONLY)
+foreach(example ${examples})
+  message(STATUS "Adding example: ${example}")
+endforeach(example ${examples})
 
 # Add a "tests" target to build unit tests.
 enable_testing()
@@ -636,10 +326,7 @@ endforeach(unittest ${unittests})
 #===============================================================================
 # Export targets
 #===============================================================================
-install(EXPORT DARTCoreTargets DESTINATION share/dartcore)
-if(NOT BUILD_CORE_ONLY)
-  install(EXPORT DARTTargets DESTINATION share/dart)
-endif()
+install(EXPORT DARTTargets DESTINATION share/dart)
 
 # Add an "uninstall" target
 # Ref: http://www.cmake.org/Wiki/CMake_FAQ#Can_I_do_.22make_uninstall.22_with_CMake.3F
@@ -658,6 +345,7 @@ if(DOXYGEN_FOUND)
   set(DOXYGEN_DOXYFILE     ${PROJECT_BINARY_DIR}/doxygen/Doxyfile       )
   set(DOXYGEN_HTML_INDEX   ${PROJECT_SOURCE_DIR}/doxygen/html/index.html)
   set(DOXYGEN_OUTPUT_ROOT  ${PROJECT_SOURCE_DIR}/doxygen/html           ) # Pasted into Doxyfile.in
+  set(DOXYGEN_GENERATE_TAGFILE ${DOXYGEN_OUTPUT_ROOT}/${PROJECT_NAME}.tag)
   set(DOXYGEN_INPUT_ROOT   ${PROJECT_SOURCE_DIR}/dart                   ) # Pasted into Doxyfile.in
   set(DOXYGEN_EXTRA_INPUTS ${PROJECT_SOURCE_DIR}/doxygen/mainpage.dox   ) # Pasted into Doxyfile.in
 

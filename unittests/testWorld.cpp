@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2013-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -37,14 +37,15 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
-#include "TestHelpers.h"
+#include "TestHelpers.hpp"
 
-#include "dart/math/Geometry.h"
-#include "dart/utils/SkelParser.h"
-#include "dart/dynamics/BodyNode.h"
-#include "dart/dynamics/RevoluteJoint.h"
-#include "dart/dynamics/Skeleton.h"
-#include "dart/simulation/World.h"
+#include "dart/math/Geometry.hpp"
+#include "dart/utils/SkelParser.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/RevoluteJoint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/collision/collision.hpp"
+#include "dart/simulation/World.hpp"
 
 using namespace dart;
 using namespace math;
@@ -186,42 +187,26 @@ TEST(World, Cloning)
   fileList.push_back(DART_DATA_PATH"skel/fullbody1.skel");
 
   std::vector<dart::simulation::WorldPtr> worlds;
-  for(size_t i=0; i<fileList.size(); ++i)
+  for(std::size_t i=0; i<fileList.size(); ++i)
     worlds.push_back(utils::SkelParser::readWorld(fileList[i]));
 
-  for(size_t i=0; i<worlds.size(); ++i)
+  for(std::size_t i=0; i<worlds.size(); ++i)
   {
     dart::simulation::WorldPtr original = worlds[i];
     std::vector<dart::simulation::WorldPtr> clones;
     clones.push_back(original);
-    for(size_t j=1; j<5; ++j)
+    for(std::size_t j=1; j<5; ++j)
       clones.push_back(clones[j-1]->clone());
 
-    // Make sure all the Skeleton states match at the start
-    // TODO(MXG): This should be removed once state also gets copied over during a cloning
-    for(size_t j=1; j<clones.size(); ++j)
-    {
-      for(size_t k=0; k<original->getNumSkeletons(); ++k)
-      {
-        dart::dynamics::SkeletonPtr skel = original->getSkeleton(k);
-        dart::dynamics::SkeletonPtr clone = clones[j]->getSkeleton(k);
-
-        clone->setPositions(skel->getPositions());
-        clone->setVelocities(skel->getVelocities());
-        clone->setAccelerations(skel->getAccelerations());
-        clone->setForces(skel->getForces());
-      }
-    }
-
 #ifndef NDEBUG // Debug mode
-    size_t numIterations = 3;
+    std::size_t numIterations = 3;
 #else
-    size_t numIterations = 500;
+    std::size_t numIterations = 500;
 #endif
 
-    for(size_t j=0; j<numIterations; ++j)
+    for(std::size_t j=0; j<numIterations; ++j)
     {
-      for(size_t k=0; k<original->getNumSkeletons(); ++k)
+      for(std::size_t k=0; k<original->getNumSkeletons(); ++k)
       {
         dart::dynamics::SkeletonPtr skel = original->getSkeleton(k);
 
@@ -231,7 +216,7 @@ TEST(World, Cloning)
           commands[q] = random(-0.1, 0.1);
 
         // Assign the command vector to each clone of the kth skeleton
-        for(size_t c=0; c<clones.size(); ++c)
+        for(std::size_t c=0; c<clones.size(); ++c)
         {
           dart::dynamics::SkeletonPtr skelClone = clones[c]->getSkeleton(k);
           skelClone->setCommands(commands);
@@ -239,13 +224,13 @@ TEST(World, Cloning)
       }
 
       // Step each clone forward
-      for(size_t c=0; c<clones.size(); ++c)
+      for(std::size_t c=0; c<clones.size(); ++c)
         clones[c]->step(false);
     }
 
-    for(size_t c=0; c<clones.size(); ++c)
+    for(std::size_t c=0; c<clones.size(); ++c)
     {
-      for(size_t k=0; k<original->getNumSkeletons(); ++k)
+      for(std::size_t k=0; k<original->getNumSkeletons(); ++k)
       {
         dart::dynamics::SkeletonPtr skel = original->getSkeleton(k);
         dart::dynamics::SkeletonPtr clone = clones[c]->getSkeleton(k);
@@ -260,8 +245,70 @@ TEST(World, Cloning)
 }
 
 //==============================================================================
+TEST(World, ValidatingClones)
+{
+  // Create a list of skel files to test with
+  std::vector<std::string> fileList;
+  fileList.push_back(DART_DATA_PATH"skel/test/chainwhipa.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/single_pendulum.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/single_pendulum_euler_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/single_pendulum_ball_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/double_pendulum.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/double_pendulum_euler_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/double_pendulum_ball_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/serial_chain_revolute_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/serial_chain_eulerxyz_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/serial_chain_ball_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/serial_chain_ball_joint_20.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/serial_chain_ball_joint_40.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/simple_tree_structure.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/simple_tree_structure_euler_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/simple_tree_structure_ball_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/tree_structure.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/tree_structure_euler_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/test/tree_structure_ball_joint.skel");
+  fileList.push_back(DART_DATA_PATH"skel/fullbody1.skel");
+
+  std::vector<dart::simulation::WorldPtr> worlds;
+  for(std::size_t i=0; i<fileList.size(); ++i)
+  {
+    worlds.push_back(utils::SkelParser::readWorld(fileList[i]));
+
+    // Set non default collision detector
+#if HAVE_BULLET_COLLISION
+    worlds.back()->getConstraintSolver()->setCollisionDetector(
+        collision::BulletCollisionDetector::create());
+#else
+    worlds.back()->getConstraintSolver()->setCollisionDetector(
+        collision::DARTCollisionDetector::create());
+#endif
+  }
+
+  for(std::size_t i=0; i<worlds.size(); ++i)
+  {
+    dart::simulation::WorldPtr original = worlds[i];
+    std::vector<dart::simulation::WorldPtr> clones;
+    clones.push_back(original);
+    for(std::size_t j=1; j<5; ++j)
+    {
+      clones.push_back(clones[j-1]->clone());
+
+      auto originalCD
+          = original->getConstraintSolver()->getCollisionDetector();
+      auto cloneCD
+          = clones.back()->getConstraintSolver()->getCollisionDetector();
+
+      std::string originalCDType = originalCD->getType();
+      std::string cloneCDType = cloneCD->getType();
+
+      EXPECT_EQ(originalCDType, cloneCDType);
+    }
+  }
+}
+
+//==============================================================================
 int main(int argc, char* argv[])
 {
-	::testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

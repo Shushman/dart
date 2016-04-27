@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2011-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Sehoon Ha <sehoon.ha@gmail.com>,
@@ -35,7 +35,9 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/EllipsoidShape.h"
+#include "dart/dynamics/EllipsoidShape.hpp"
+
+#include "dart/math/Helpers.hpp"
 
 namespace dart {
 namespace dynamics {
@@ -66,7 +68,7 @@ const Eigen::Vector3d&EllipsoidShape::getSize() const {
 double EllipsoidShape::computeVolume(const Eigen::Vector3d& size)
 {
   // 4/3* Pi* a/2* b/2* c/2
-  return DART_PI * size[0] * size[1] * size[2] / 6.0;
+  return math::constantsd::pi() * size[0] * size[1] * size[2] / 6.0;
 }
 
 //==============================================================================

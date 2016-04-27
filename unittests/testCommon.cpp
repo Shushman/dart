@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2014-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Jeongseok Lee <jslee02@gmail.com>
@@ -36,7 +36,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dart/common/Timer.h"
+#include "dart/common/Timer.hpp"
 
 using namespace dart::common;
 

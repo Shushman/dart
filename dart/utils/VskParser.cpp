@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, Georgia Tech Research Corporation
+ * Copyright (c) 2012-2016, Georgia Tech Research Corporation
  * All rights reserved.
  *
  * Author(s): Sehoon Ha <sehoon.ha@gmail.com>,
@@ -36,7 +36,7 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/utils/VskParser.h"
+#include "dart/utils/VskParser.hpp"
 
 // Standard Library
 #include <map>
@@ -46,10 +46,10 @@
 #include <Eigen/Dense>
 
 // Local Files
-#include "dart/common/LocalResourceRetriever.h"
-#include "dart/common/Uri.h"
-#include "dart/dynamics/dynamics.h"
-#include "dart/utils/XmlHelpers.h"
+#include "dart/common/LocalResourceRetriever.hpp"
+#include "dart/common/Uri.hpp"
+#include "dart/dynamics/dynamics.hpp"
+#include "dart/utils/XmlHelpers.hpp"
 
 #define SCALE_VSK 1.0e-3
 
@@ -155,6 +155,9 @@ void tokenize(const std::string& str,
               std::vector<std::string>& tokens,
               const std::string& delimiters = " ");
 
+common::ResourceRetrieverPtr getRetriever(
+    const common::ResourceRetrieverPtr& retriever);
+
 } // anonymous namespace
 
 //==============================================================================
@@ -183,8 +186,10 @@ VskParser::Options::Options(
 
 //==============================================================================
 dynamics::SkeletonPtr VskParser::readSkeleton(const common::Uri& fileUri,
-                                              const Options options)
+                                              Options options)
 {
+  options.retrieverOrNullptr = getRetriever(options.retrieverOrNullptr);
+
   // Load VSK file and create document
   tinyxml2::XMLDocument vskDocument;
   try
@@ -337,7 +342,7 @@ double getParameter(const ParameterMap& ParameterMap,
 }
 
 //==============================================================================
-template <size_t NumParams>
+template <std::size_t NumParams>
 Eigen::Matrix<double, NumParams, 1> getParameters(
     const ParameterMap& ParameterMap,
     const std::string& paramNamesOrValues)
@@ -349,14 +354,14 @@ Eigen::Matrix<double, NumParams, 1> getParameters(
 
   Eigen::Matrix<double, NumParams, 1> result;
 
-  for (size_t i = 0; i < NumParams; ++i)
+  for (std::size_t i = 0; i < NumParams; ++i)
     result[i] = getParameter(ParameterMap, tokens[i]);
 
   return result;
 }
 
 //==============================================================================
-template <size_t NumParams>
+template <std::size_t NumParams>
 Eigen::Matrix<double, NumParams, 1> readAttributeVector(
     const tinyxml2::XMLElement* element,
     const std::string& name,
@@ -527,14 +532,14 @@ bool readShape(const tinyxml2::XMLElement* shapeEle,
   }
 
   dynamics::ShapeNode* node = parent->createShapeNodeWith<
-      dynamics::VisualAddon,
-      dynamics::CollisionAddon,
-      dynamics::DynamicsAddon>(
+      dynamics::VisualAspect,
+      dynamics::CollisionAspect,
+      dynamics::DynamicsAspect>(
         shape,
         parent->getName()+"_shape_"+std::to_string(parent->getNumShapeNodes()));
 
   node->setRelativeTransform(localTransform);
-  node->getVisualAddon()->setColor(vskData.bodyNodeColorMap[parent]);
+  node->getVisualAspect()->setColor(vskData.bodyNodeColorMap[parent]);
 
   return true;
 }
@@ -612,7 +617,7 @@ bool readJointBall(const tinyxml2::XMLElement* /*jointEle*/,
         vskData.options.jointPositionLowerLimit);
   properties.mPositionUpperLimits = Eigen::Vector3d::Constant(
         vskData.options.jointPositionUpperLimit);
-  properties.mIsPositionLimited = true;
+  properties.mIsPositionLimitEnforced = true;
   properties.mFrictions = Eigen::Vector3d::Constant(
         vskData.options.jointFriction);
 
@@ -652,7 +657,7 @@ bool readJointHardySpicer(const tinyxml2::XMLElement* jointEle,
         vskData.options.jointPositionLowerLimit);
   properties.mPositionUpperLimits = Eigen::Vector2d::Constant(
         vskData.options.jointPositionUpperLimit);
-  properties.mIsPositionLimited = true;
+  properties.mIsPositionLimitEnforced = true;
   properties.mFrictions = Eigen::Vector2d::Constant(
         vskData.options.jointFriction);
 
@@ -682,7 +687,7 @@ bool readJointHinge(const tinyxml2::XMLElement* jointEle,
   properties.mDampingCoefficient = vskData.options.jointDampingCoefficient;
   properties.mPositionLowerLimit = vskData.options.jointPositionLowerLimit;
   properties.mPositionUpperLimit = vskData.options.jointPositionUpperLimit;
-  properties.mIsPositionLimited = true;
+  properties.mIsPositionLimitEnforced = true;
   properties.mFriction = vskData.options.jointFriction;
 
   jointProperties
@@ -858,9 +863,7 @@ bool readMarker(const tinyxml2::XMLElement* markerEle,
     return false;
   }
 
-  dynamics::Marker* marker = new dynamics::Marker(name, position, rgba,
-                                                  bodyNode);
-  bodyNode->addMarker(marker);
+  bodyNode->createMarker(name, position, rgba);
 
   return true;
 }
@@ -884,7 +887,7 @@ bool readStick(const tinyxml2::XMLElement* /*stickEle*/,
 void generateShapes(const dynamics::SkeletonPtr& skel, VskData& vskData)
 {
   // Generate shapes for bodies that have their parents
-  for (size_t i = 0; i < skel->getNumBodyNodes(); ++i)
+  for (std::size_t i = 0; i < skel->getNumBodyNodes(); ++i)
   {
     dynamics::BodyNode* bodyNode = skel->getBodyNode(i);
     dynamics::Joint*    joint    = skel->getJoint(i);
@@ -893,7 +896,7 @@ void generateShapes(const dynamics::SkeletonPtr& skel, VskData& vskData)
 
     // Don't add a shape for a body doesn't have parent or a body is too close
     // to the parent.
-    if (!parent || tf.translation().norm() < DART_EPSILON)
+    if (!parent || tf.translation().norm() < 1e-6)
       continue;
 
     // If a body already has enough shapes, do NOT automatically generate a new
@@ -915,22 +918,22 @@ void generateShapes(const dynamics::SkeletonPtr& skel, VskData& vskData)
     localTransform.translation() = 0.5 * tf.translation();
 
     dynamics::ShapeNode* shapeNode = parent->createShapeNodeWith<
-        dynamics::VisualAddon,
-        dynamics::CollisionAddon,
-        dynamics::DynamicsAddon>(
+        dynamics::VisualAspect,
+        dynamics::CollisionAspect,
+        dynamics::DynamicsAspect>(
           dynamics::ShapePtr(new dynamics::EllipsoidShape(size)),
           parent->getName()+"_shape_"+
           std::to_string(parent->getNumShapeNodes()));
 
     shapeNode->setRelativeTransform(localTransform);
-    shapeNode->getVisualAddon()->setColor(vskData.bodyNodeColorMap[parent]);
+    shapeNode->getVisualAspect()->setColor(vskData.bodyNodeColorMap[parent]);
   }
 
   // Remove redundant leaf body nodes with no shape
   if (vskData.options.removeEndBodyNodes)
   {
     std::vector<dynamics::BodyNode*> emptynodes;
-    for (size_t i = 0; i < skel->getNumBodyNodes(); ++i)
+    for (std::size_t i = 0; i < skel->getNumBodyNodes(); ++i)
     {
       dynamics::BodyNode* bodyNode = skel->getBodyNode(i);
 
@@ -947,7 +950,7 @@ void generateShapes(const dynamics::SkeletonPtr& skel, VskData& vskData)
 
   // Update mass and moments of inertia of the bodies based on the their shapes
   const double& density = vskData.options.density;
-  for (size_t i = 0; i < skel->getNumBodyNodes(); ++i)
+  for (std::size_t i = 0; i < skel->getNumBodyNodes(); ++i)
   {
     dynamics::BodyNode* bodyNode = skel->getBodyNode(i);
 
@@ -1014,6 +1017,16 @@ void tokenize(const std::string& str,
     // Find next "non-delimiter"
     pos = str.find_first_of(delimiters, lastPos);
   }
+}
+
+//==============================================================================
+common::ResourceRetrieverPtr getRetriever(
+  const common::ResourceRetrieverPtr& retriever)
+{
+  if(retriever)
+    return retriever;
+  else
+    return std::make_shared<common::LocalResourceRetriever>();
 }
 
 } // anonymous namespace
